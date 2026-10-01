@@ -1,0 +1,39 @@
+/* Guake : onglets minimal sombre, accordés à la barre tmux (#notebook-teminals = id interne de Guake) */
+#notebook-teminals > header {
+  background: #2e3440;
+  border: none;
+  box-shadow: none;
+  padding: 0 4px;
+}
+#notebook-teminals > header > tabs > tab {
+  min-height: 0;
+  padding: 9px 16px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #9aa3b5;
+  box-shadow: none;
+}
+#notebook-teminals > header > tabs > tab + tab {
+  border-left: 1px solid #5c6370;  /* trait entre onglets, comme le │ de tmux */
+}
+#notebook-teminals > header > tabs > tab:hover {
+  color: #dedddA;
+  background: #3b4252;
+}
+#notebook-teminals > header > tabs > tab:checked {
+  color: #1c1c1c;
+  background: #86aed6;  /* bloc bleu plein, comme l'onglet actif tmux */
+  font-weight: bold;
+}
+#notebook-teminals > header > tabs > tab button {
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+  margin-left: 6px;
+  opacity: 0.4;
+}
+#notebook-teminals > header > tabs > tab button:hover {
+  opacity: 1;
+}

@@ -9,7 +9,7 @@ for s in $(tmux ls -F '#{session_id}' 2>/dev/null); do
     avail=$(( width - (n - 1) ))  # moins les séparateurs │
     w=$(( avail / n ))
     (( k == n - 1 )) && w=$(( avail - w * (n - 1) ))  # le dernier prend le reste
-    text="$idx $name"
+    text="[$idx] $name"
     (( ${#text} > w - 2 )) && text="${text:0:$(( w > 3 ? w - 3 : 0 ))}…"
     left=$(( (w - ${#text}) / 2 ))
     printf -v label '%*s%s%*s' "$left" '' "$text" "$(( w - left - ${#text} ))" ''

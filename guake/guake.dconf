@@ -39,6 +39,15 @@ window-width=100
 show-hide='section'
 
 [keybindings/local]
+switch-tab1='<Alt>1'
+switch-tab2='<Alt>2'
+switch-tab3='<Alt>3'
+switch-tab4='<Alt>4'
+switch-tab5='<Alt>5'
+switch-tab6='<Alt>6'
+switch-tab7='<Alt>7'
+switch-tab8='<Alt>8'
+switch-tab9='<Alt>9'
 zoom-in='<Primary>KP_Add'
 zoom-out='<Primary>KP_Subtract'
 

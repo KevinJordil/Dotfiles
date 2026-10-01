@@ -5,14 +5,19 @@ D=$(cd "$(dirname "$0")" && pwd)
 
 echo "== Paquets"
 missing=()
-for p in guake tmux jq xclip git; do command -v $p >/dev/null || missing+=($p); done
+for p in zsh guake tmux jq xclip git; do command -v $p >/dev/null || missing+=($p); done
 (( ${#missing[@]} )) && sudo apt-get install -y "${missing[@]}"
+
+echo "== Oh My Zsh + Powerlevel10k + zsh-autosuggestions"
+clone() { [[ -d $2 ]] || git clone -q --depth 1 "$1" "$2"; }
+clone https://github.com/ohmyzsh/ohmyzsh ~/.oh-my-zsh
+clone https://github.com/romkatv/powerlevel10k ~/.oh-my-zsh/custom/themes/powerlevel10k
+clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+[[ $(getent passwd "$USER" | cut -d: -f7) == */zsh ]] || chsh -s "$(command -v zsh)"  # demande le mot de passe
 
 echo "== Plugins tmux"
 mkdir -p ~/.tmux/plugins ~/.cache
-for p in tmux-resurrect tmux-continuum; do
-  [[ -d ~/.tmux/plugins/$p ]] || git clone -q --depth 1 https://github.com/tmux-plugins/$p ~/.tmux/plugins/$p
-done
+for p in tmux-resurrect tmux-continuum; do clone https://github.com/tmux-plugins/$p ~/.tmux/plugins/$p; done
 
 echo "== Liens vers le repo (fichier existant sauvegardé en .bak)"
 link() {
@@ -23,10 +28,8 @@ link() {
 link "$D/tmux/tmux.conf" ~/.tmux.conf
 link "$D/tmux/tabs.sh" ~/.tmux/tabs.sh
 link "$D/gtk/gtk.css" ~/.config/gtk-3.0/gtk.css
-
-echo "== zshrc"
-line="source $D/zsh/guake-tmux.zsh  # Guake + tmux (dotfiles) : doit rester en tête"
-grep -qF "$D/zsh/guake-tmux.zsh" ~/.zshrc 2>/dev/null || { printf '%s\n\n' "$line" | cat - ~/.zshrc 2>/dev/null > ~/.zshrc.new; mv ~/.zshrc.new ~/.zshrc; }
+link "$D/zsh/zshrc" ~/.zshrc  # réglages propres au PC : ~/.zshrc.local (hors repo)
+link "$D/zsh/p10k.zsh" ~/.p10k.zsh
 
 echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"

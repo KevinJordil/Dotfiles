@@ -1,6 +1,6 @@
 # dotfiles
 
-Guake + tmux : un set tmux par onglet Guake, restauré après redémarrage, et des onglets assortis (largeur égale, onglet actif en bleu).
+zsh (Oh My Zsh + Powerlevel10k) + Guake + tmux : un set tmux par onglet Guake, restauré après redémarrage, et des onglets assortis (largeur égale, onglet actif en bleu).
 
 ## Installer (Ubuntu)
 
@@ -9,7 +9,7 @@ git clone <ce repo> ~/dotfiles && ~/dotfiles/install.sh
 guake --quit; guake &
 ```
 
-`install.sh` peut être relancé sans risque. Relance-le après une mise à jour de Guake pour remettre le patch.
+`install.sh` installe zsh + Oh My Zsh + Powerlevel10k + zsh-autosuggestions, et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque. Relance-le après une mise à jour de Guake pour remettre le patch.
 
 ## Contenu
 
@@ -19,11 +19,15 @@ guake --quit; guake &
 | `tmux/tabs.sh` | calcule les onglets tmux en largeur égale, texte centré | `~/.tmux/tabs.sh` (lien) |
 | `gtk/gtk.css` | style des onglets Guake | `~/.config/gtk-3.0/gtk.css` (lien) |
 | `guake/guake.dconf` | réglages Guake | chargé avec `dconf load` |
-| `zsh/guake-tmux.zsh` | rattache chaque onglet à son set tmux, historique par set, fonction `nom` | sourcé en tête de `~/.zshrc` |
+| `zsh/zshrc` | zsh générique : Oh My Zsh, Powerlevel10k, plugins git/zsh-autosuggestions/docker ; source `~/.zshrc.local` | `~/.zshrc` (lien) |
+| `zsh/p10k.zsh` | config du prompt Powerlevel10k | `~/.p10k.zsh` (lien) |
+| `zsh/guake-tmux.zsh` | rattache chaque onglet à son set tmux, historique par set, fonction `nom` | sourcé en tête de `zsh/zshrc` |
 
 Patch Guake : une ligne `tab-expand` ajoutée dans `guake/notebook.py`, avec sudo et une sauvegarde `.bak`.
 
 ## Usage
+
+- Variables, alias et fonctions propres à un PC (pro, chemins locaux) : dans `~/.zshrc.local`, jamais versionné.
 
 - `nom <x>` : renomme l'onglet Guake et son set tmux. C'est ce nom qui permet de retrouver le set après un redémarrage.
 - Réglages Guake modifiés ? Mets à jour le fichier : `dconf dump /org/guake/ | grep -v '^schema-version=' > ~/dotfiles/guake/guake.dconf`

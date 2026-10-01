@@ -39,7 +39,6 @@ link "$D/zsh/p10k.zsh" ~/.p10k.zsh
 echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"
 gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
-gsettings set guake.general background-image-file "$D/guake/fond-constellations.png"  # fond étoilé (chemin propre à chaque PC)
 
 echo "== Patchs Guake : onglets en largeur égale, numéros [N], barre date/heure (à refaire après une mise à jour de Guake)"
 pkg=$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')

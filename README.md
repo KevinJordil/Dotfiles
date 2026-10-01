@@ -19,7 +19,6 @@ guake --quit; guake &
 | `tmux/tabs.sh` | calcule les onglets tmux en largeur égale, texte centré | `~/.tmux/tabs.sh` (lien) |
 | `gtk/gtk.css` | style des onglets Guake | `~/.config/gtk-3.0/gtk.css` (lien) |
 | `fonts/` | Roboto Mono (police de Guake), MesloLGS NF (icônes Powerlevel10k) | `~/.local/share/fonts` (copie) |
-| `guake/fond-constellations.png` | fond étoilé de Guake (visible à travers la transparence) | réglage `background-image-file` |
 | `guake/guake.dconf` | réglages Guake | chargé avec `dconf load` |
 | `zsh/zshrc` | zsh générique : Oh My Zsh, Powerlevel10k, plugins git/zsh-autosuggestions/docker ; source `~/.zshrc.local` | `~/.zshrc` (lien) |
 | `zsh/p10k.zsh` | config du prompt Powerlevel10k | `~/.p10k.zsh` (lien) |

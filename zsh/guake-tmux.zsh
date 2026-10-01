@@ -1,6 +1,7 @@
 # Guake : chaque onglet = un set tmux ; fermer la dernière console ferme l'onglet
 # Le set porte le nom de l'onglet (tab<N> si sans nom) → après redémarrage, l'onglet retrouve son set restauré (resurrect)
 if [[ -n $GUAKE_TAB_UUID && -z $TMUX ]]; then
+  export SHELL=${commands[zsh]}  # tmux ouvre $SHELL : encore bash après chsh tant que la session n'est pas relancée
   _i=$(guake -x $GUAKE_TAB_UUID 2>/dev/null)
   if [[ $_i == <-> ]]; then
     _s=$(jq -r ".workspace[\"0\"][0][$_i] | select(.custom_label_set) | .label" ~/.config/guake/session.json 2>/dev/null)

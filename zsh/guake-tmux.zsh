@@ -8,8 +8,14 @@ if [[ -n $GUAKE_TAB_UUID && -z $TMUX ]]; then
     _s=${_s:-tab$_i}
     # 1er onglet après redémarrage : restaure les sets sauvegardés (verrou : les onglets démarrent en parallèle)
     flock -o ~/.cache/tmux-restore2.lock zsh -c 'tmux has 2>/dev/null || { tmux new -d -s _boot && tmux run ~/.tmux/plugins/tmux-resurrect/scripts/restore.sh; tmux kill-session -t _boot }'
+    # onglet renommé depuis Guake (le set tmux, lui, a gardé tab<N>) : reprend tab<N> s'il est sans client
+    if [[ $_s != tab$_i ]] && ! tmux has -t "=$_s" 2>/dev/null \
+       && [[ $(tmux display -p -t "=tab$_i:" '#{session_attached}' 2>/dev/null) == 0 ]]; then
+      tmux rename-session -t "=tab$_i" "$_s"
+      [[ -f ~/.zsh_history.d/$_s || ! -f ~/.zsh_history.d/tab$_i ]] || cp ~/.zsh_history.d/tab$_i ~/.zsh_history.d/$_s
+    fi
     # set déjà ouvert dans un autre onglet → set neuf
-    [[ $(tmux display -p -t "=$_s" '#{session_attached}' 2>/dev/null) != [1-9]* ]] && exec tmux new -A -s "$_s"
+    [[ $(tmux display -p -t "=$_s:" '#{session_attached}' 2>/dev/null) != [1-9]* ]] && exec tmux new -A -s "$_s"
   fi
   exec tmux new
 fi
@@ -19,13 +25,18 @@ if [[ -n $TMUX ]]; then
   mkdir -p ~/.zsh_history.d
   HISTFILE=~/.zsh_history.d/$(tmux display -p '#S')
   [[ -f $HISTFILE || ! -f ~/.zsh_history ]] || cp ~/.zsh_history $HISTFILE
+  # à chaque prompt, l'historique suit le nom du set (renommé par `nom`, Guake ou à la main) ; le nouveau part de l'ancien
+  _hist_follow() {
+    local f=~/.zsh_history.d/$(tmux display -p '#S' 2>/dev/null)
+    [[ $f == */ || $HISTFILE == $f ]] && return
+    [[ -f $f || ! -f $HISTFILE ]] || cp $HISTFILE $f
+    fc -p $f $HISTSIZE $SAVEHIST
+  }
+  autoload -Uz add-zsh-hook && add-zsh-hook precmd _hist_follow
 fi
 
-# nom <x> : renomme l'onglet Guake + le set tmux, et bascule sur l'historique de <x>
+# nom <x> : renomme l'onglet Guake + le set tmux (l'historique suit au prompt suivant)
 nom() {
-  local h=~/.zsh_history.d/$1
-  [[ -f $h || ! -f ~/.zsh_history ]] || cp ~/.zsh_history $h
   guake -r "$1"
   tmux rename-session "$1"
-  fc -p $h $HISTSIZE $SAVEHIST
 }

@@ -24,7 +24,7 @@ guake --quit; guake &
 | `zsh/p10k.zsh` | config du prompt Powerlevel10k | `~/.p10k.zsh` (lien) |
 | `zsh/guake-tmux.zsh` | rattache chaque onglet à son set tmux, historique par set, fonction `nom` | sourcé en tête de `zsh/zshrc` |
 
-Patch Guake : une ligne `tab-expand` ajoutée dans `guake/notebook.py`, avec sudo et une sauvegarde `.bak`.
+Patchs Guake (`guake/patch.py`, avec sudo, sauvegarde `.bak`) : onglets en largeur égale, et barre du haut avec la date et l'heure centrées.
 
 ## Usage
 

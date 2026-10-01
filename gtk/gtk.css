@@ -37,3 +37,10 @@
 #notebook-teminals > header > tabs > tab button:hover {
   opacity: 1;
 }
+/* Barre du haut avec la date et l'heure (ajoutée par le patch dotfiles/guake/patch.py) */
+#guake-clock {
+  background: #2e3440;
+  color: #dedddA;
+  font-weight: bold;
+  padding: 6px 0;
+}

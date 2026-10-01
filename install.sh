@@ -40,13 +40,12 @@ echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"
 gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
 
-echo "== Patch Guake : onglets en largeur égale (à refaire après une mise à jour de Guake)"
-nb=$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')/notebook.py
-if grep -q '"tab-expand"' "$nb"; then
-  echo "déjà appliqué"
+echo "== Patchs Guake : onglets en largeur égale + barre date/heure (à refaire après une mise à jour de Guake)"
+pkg=$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')
+if grep -q '"tab-expand"' "$pkg/notebook.py" && grep -q 'guake-clock' "$pkg/guake_app.py"; then
+  echo "déjà appliqués"
 else
-  sudo sed -i.bak '/self.set_tab_reorderable(root_terminal_box, True)/a\        self.child_set_property(root_terminal_box, "tab-expand", True)  # onglets en largeur égale' "$nb"
-  grep -q '"tab-expand"' "$nb" || echo "ATTENTION : patch non appliqué (code de Guake différent ?)"
+  sudo python3 "$D/guake/patch.py" "$pkg"
 fi
 
 echo "OK. Relance Guake : guake --quit; guake &"

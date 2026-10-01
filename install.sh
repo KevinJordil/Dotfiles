@@ -15,6 +15,11 @@ clone https://github.com/romkatv/powerlevel10k ~/.oh-my-zsh/custom/themes/powerl
 clone https://github.com/zsh-users/zsh-autosuggestions ~/.oh-my-zsh/custom/plugins/zsh-autosuggestions
 [[ $(getent passwd "$USER" | cut -d: -f7) == */zsh ]] || chsh -s "$(command -v zsh)"  # demande le mot de passe
 
+echo "== Polices (Roboto Mono pour Guake, MesloLGS NF pour les icônes du prompt)"
+mkdir -p ~/.local/share/fonts
+for f in "$D"/fonts/*.ttf; do [[ -e ~/.local/share/fonts/${f##*/} ]] || cp "$f" ~/.local/share/fonts/; done
+fc-cache -f ~/.local/share/fonts || echo "fc-cache a échoué (les polices seront prises en compte à la reconnexion)"
+
 echo "== Plugins tmux"
 mkdir -p ~/.tmux/plugins ~/.cache
 for p in tmux-resurrect tmux-continuum; do clone https://github.com/tmux-plugins/$p ~/.tmux/plugins/$p; done
@@ -33,6 +38,7 @@ link "$D/zsh/p10k.zsh" ~/.p10k.zsh
 
 echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"
+gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
 
 echo "== Patch Guake : onglets en largeur égale (à refaire après une mise à jour de Guake)"
 nb=$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')/notebook.py

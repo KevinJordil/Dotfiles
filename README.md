@@ -18,6 +18,7 @@ guake --quit; guake &
 | `tmux/tmux.conf` | style de la barre, hooks, resurrect + continuum (sauvegarde toutes les 5 min) | `~/.tmux.conf` (lien) |
 | `tmux/tabs.sh` | calcule les onglets tmux en largeur égale, texte centré | `~/.tmux/tabs.sh` (lien) |
 | `gtk/gtk.css` | style des onglets Guake | `~/.config/gtk-3.0/gtk.css` (lien) |
+| `fonts/` | Roboto Mono (police de Guake), MesloLGS NF (icônes Powerlevel10k) | `~/.local/share/fonts` (copie) |
 | `guake/guake.dconf` | réglages Guake | chargé avec `dconf load` |
 | `zsh/zshrc` | zsh générique : Oh My Zsh, Powerlevel10k, plugins git/zsh-autosuggestions/docker ; source `~/.zshrc.local` | `~/.zshrc` (lien) |
 | `zsh/p10k.zsh` | config du prompt Powerlevel10k | `~/.p10k.zsh` (lien) |
@@ -34,5 +35,4 @@ Patch Guake : une ligne `tab-expand` ajoutée dans `guake/notebook.py`, avec sud
 
 ## Limites
 
-- Police `Roboto Mono` attendue par la config Guake (sinon Guake utilise une police par défaut).
 - Les onglets Guake sans nom sont retrouvés par leur position.

@@ -18,13 +18,13 @@ fi
 if [[ -n $TMUX ]]; then
   mkdir -p ~/.zsh_history.d
   HISTFILE=~/.zsh_history.d/$(tmux display -p '#S')
-  [[ -f $HISTFILE ]] || cp ~/.zsh_history $HISTFILE
+  [[ -f $HISTFILE || ! -f ~/.zsh_history ]] || cp ~/.zsh_history $HISTFILE
 fi
 
 # nom <x> : renomme l'onglet Guake + le set tmux, et bascule sur l'historique de <x>
 nom() {
   local h=~/.zsh_history.d/$1
-  [[ -f $h ]] || cp ~/.zsh_history $h
+  [[ -f $h || ! -f ~/.zsh_history ]] || cp ~/.zsh_history $h
   guake -r "$1"
   tmux rename-session "$1"
   fc -p $h $HISTSIZE $SAVEHIST

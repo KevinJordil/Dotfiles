@@ -44,3 +44,9 @@
   font-weight: bold;
   padding: 6px 0;
 }
+/* Même police que la console et tmux (réglage style/font de guake.dconf) */
+#notebook-teminals > header > tabs > tab label,
+#guake-clock {
+  font-family: "Roboto Mono";
+  font-size: 11pt;
+}

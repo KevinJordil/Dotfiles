@@ -18,6 +18,8 @@ TEXT_FUNCS = """    def set_text(self, text):
         return self.label.get_text()
 """
 RENAME = "RenameDialog(self.notebook.guake.window, self.label.get_text())"
+ACTION_BOX = "        self.action_box = Gtk.Box(visible=True)\n"
+TERM_INIT = "        super().__init__()\n        self.guake = guake\n        self.configure_terminal()\n"
 USER_SET = """            if user_set:
                 setattr(page, "custom_label_set", new_text != "-")
 """
@@ -90,6 +92,13 @@ PATCHES = [
                 except (OSError, subprocess.SubprocessError, ValueError):
                     pass
 """),
+    # pas de boutons à droite des onglets (nouvel onglet : Ctrl+Shift+T)
+    ("notebook.py", "dotfiles-no-action-box", ACTION_BOX,
+     "        self.action_box = Gtk.Box(visible=False, no_show_all=True)  # dotfiles-no-action-box\n"),
+    # pixels en trop (hauteur non multiple d'une ligne) en haut : la barre tmux colle aux onglets Guake
+    ("terminal.py", "dotfiles-yalign", TERM_INIT, TERM_INIT
+     + "        if hasattr(self, \"set_yalign\"):  # dotfiles-yalign (VTE >= 0.76)\n"
+     + "            self.set_yalign(Vte.Align.END)\n"),
 ]
 
 pkg = Path(sys.argv[1])

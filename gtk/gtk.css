@@ -50,3 +50,7 @@
   font-family: "Roboto Mono";
   font-size: 11pt;
 }
+/* Pas de marge intérieure autour du terminal : la barre tmux touche les onglets Guake */
+#notebook-teminals vte-terminal {
+  padding: 0;
+}

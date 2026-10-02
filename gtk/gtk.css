@@ -33,6 +33,12 @@
   background: #86aed6;  /* bloc bleu plein, comme l'onglet actif tmux */
   font-weight: bold;
 }
+/* comme tmux : le trait │ y occupe une colonne de 9 px, donc 4 px de fond foncé de chaque côté du trait.
+   ponytail: 4 px = demi-largeur d'un caractère de Roboto Mono 11 ; à ajuster si la police change */
+#notebook-teminals > header > tabs > tab:checked { box-shadow: inset 4px 0 #2e3440, inset -4px 0 #2e3440; }
+#notebook-teminals > header > tabs > tab:checked:first-child { box-shadow: inset -4px 0 #2e3440; }
+#notebook-teminals > header > tabs > tab:checked:last-child { box-shadow: inset 4px 0 #2e3440; }
+#notebook-teminals > header > tabs > tab:checked:first-child:last-child { box-shadow: none; }
 #notebook-teminals > header > tabs > tab button {
   min-height: 0;
   min-width: 0;

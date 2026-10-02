@@ -24,6 +24,11 @@ NUM_INIT = "        self._name, self.num = text, 0  # dotfiles-num-init : numér
 RENUM_CONNECT = """        for signal in ("page-added", "page-removed", "page-reordered"):
             self.connect(signal, _renumber)
 """
+ALIGN_V1 = """            w, col, edges = avail // n, 0, [0]
+            for _ in range(n - 1):
+                col += w
+                edges.append(col * cw + (cw + 1) // 2)  # pixel où VTE dessine le trait │ de tmux (mesuré)
+"""
 USER_SET = """            if user_set:
                 setattr(page, "custom_label_set", new_text != "-")
 """
@@ -164,6 +169,16 @@ PATCHES = [
 
         self.dotfiles_renumber = _renumber_and_align
 """),
+    # correction de l'alignement : position réelle du terminal mesurée (elle variait de 1 px selon le contexte)
+    ("notebook.py", "dotfiles-align-v2", ALIGN_V1, """            # dotfiles-align-v2 : position réelle du terminal affiché (un terminal masqué renverrait 0)
+            cur = next(self.get_nth_page(self.get_current_page()).iter_terminals(), term)
+            ox = cur.translate_coordinates(self, 0, 0)[0] if cur.get_mapped() else 0
+            w, col, edges = avail // n, 0, [0]
+            for _ in range(n - 1):
+                col += w
+                edges.append(ox + col * cw + cw // 2)  # pixel où VTE dessine le trait │ de tmux
+                col += 1
+""".replace("                col += 1\n", "")),
 ]
 
 pkg = Path(sys.argv[1])

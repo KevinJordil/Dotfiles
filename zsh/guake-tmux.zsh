@@ -8,12 +8,6 @@ if [[ -n $GUAKE_TAB_UUID && -z $TMUX ]]; then
     _s=${_s:-tab$_i}
     # 1er onglet après redémarrage : restaure les sets sauvegardés (verrou : les onglets démarrent en parallèle)
     flock -o ~/.cache/tmux-restore2.lock zsh -c 'tmux has 2>/dev/null || { tmux new -d -s _boot && tmux run ~/.tmux/plugins/tmux-resurrect/scripts/restore.sh; tmux kill-session -t _boot }'
-    # onglet renommé depuis Guake (le set tmux, lui, a gardé tab<N>) : reprend tab<N> s'il est sans client
-    if [[ $_s != tab$_i ]] && ! tmux has -t "=$_s" 2>/dev/null \
-       && [[ $(tmux display -p -t "=tab$_i:" '#{session_attached}' 2>/dev/null) == 0 ]]; then
-      tmux rename-session -t "=tab$_i" "$_s"
-      [[ -f ~/.zsh_history.d/$_s || ! -f ~/.zsh_history.d/tab$_i ]] || cp ~/.zsh_history.d/tab$_i ~/.zsh_history.d/$_s
-    fi
     # set déjà ouvert dans un autre onglet → set neuf
     [[ $(tmux display -p -t "=$_s:" '#{session_attached}' 2>/dev/null) != [1-9]* ]] && exec tmux new -A -s "$_s"
   fi

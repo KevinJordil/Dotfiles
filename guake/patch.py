@@ -18,6 +18,9 @@ TEXT_FUNCS = """    def set_text(self, text):
         return self.label.get_text()
 """
 RENAME = "RenameDialog(self.notebook.guake.window, self.label.get_text())"
+USER_SET = """            if user_set:
+                setattr(page, "custom_label_set", new_text != "-")
+"""
 
 # (fichier, mot-clé qui prouve que le patch est là, texte d'origine, texte qui le remplace)
 PATCHES = [
@@ -70,6 +73,23 @@ PATCHES = [
 """),
     ("notebook.py", "self.dotfiles_renumber()", SET_LABEL, SET_LABEL
      + "                self.dotfiles_renumber()\n"),
+    # renommer un onglet renomme aussi son set tmux (le client tmux est le processus du terminal de l'onglet)
+    ("notebook.py", "dotfiles-tmux-rename", USER_SET, USER_SET + """            if user_set and new_text != "-":  # dotfiles-tmux-rename
+                import subprocess
+
+                pids = {str(t.pid) for t in page.iter_terminals() if t.pid}
+                try:
+                    clients = subprocess.run(
+                        ["tmux", "list-clients", "-F", "#{client_pid} #{session_id}"],
+                        capture_output=True, text=True, timeout=2,
+                    ).stdout
+                    for line in clients.splitlines():
+                        pid, sid = line.split(" ", 1)
+                        if pid in pids:
+                            subprocess.run(["tmux", "rename-session", "-t", sid, new_text], timeout=2)
+                except (OSError, subprocess.SubprocessError, ValueError):
+                    pass
+"""),
 ]
 
 pkg = Path(sys.argv[1])

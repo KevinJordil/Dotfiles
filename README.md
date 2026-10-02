@@ -24,13 +24,13 @@ guake --quit; guake &
 | `zsh/p10k.zsh` | config du prompt Powerlevel10k | `~/.p10k.zsh` (lien) |
 | `zsh/guake-tmux.zsh` | rattache chaque onglet à son set tmux, historique par set, fonction `nom` | sourcé en tête de `zsh/zshrc` |
 
-Patchs Guake (`guake/patch.py`, avec sudo, sauvegarde `.bak`) : onglets en largeur égale, numéro `[N]` devant le nom des onglets, barre du haut avec la date et l'heure centrées.
+Patchs Guake (`guake/patch.py`, avec sudo, sauvegarde `.bak`) : onglets en largeur égale, numéro `[N]` devant le nom des onglets, renommer un onglet renomme aussi son set tmux, barre du haut avec la date et l'heure centrées.
 
 ## Usage
 
 - Variables, alias et fonctions propres à un PC (pro, chemins locaux) : dans `~/.zshrc.local`, jamais versionné.
 
-- `nom <x>` : renomme l'onglet Guake et son set tmux. C'est ce nom qui permet de retrouver le set après un redémarrage.
+- Renommer un onglet (dans Guake ou avec `nom <x>`) renomme aussi son set tmux : c'est ce nom qui permet de retrouver le set après un redémarrage, quel que soit l'ordre des onglets.
 - Réglages Guake modifiés ? Mets à jour le fichier : `dconf dump /org/guake/ | grep -v '^schema-version=' > ~/dotfiles/guake/guake.dconf`
 
 ## Limites

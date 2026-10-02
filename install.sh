@@ -40,9 +40,9 @@ echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"
 gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
 
-echo "== Patchs Guake : onglets en largeur égale, numéros [N], barre date/heure (à refaire après une mise à jour de Guake)"
+echo "== Patchs Guake : onglets en largeur égale, numéros [N], barre date/heure, renommage synchronisé avec tmux (à refaire après une mise à jour de Guake)"
 pkg=$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')
-if grep -q '"tab-expand"' "$pkg/notebook.py" && grep -q 'guake-clock' "$pkg/guake_app.py" && grep -q 'dotfiles-renumber' "$pkg/notebook.py"; then
+if grep -q '"tab-expand"' "$pkg/notebook.py" && grep -q 'guake-clock' "$pkg/guake_app.py" && grep -q 'dotfiles-renumber' "$pkg/notebook.py" && grep -q 'dotfiles-tmux-rename' "$pkg/notebook.py"; then
   echo "déjà appliqués"
 else
   sudo python3 "$D/guake/patch.py" "$pkg"

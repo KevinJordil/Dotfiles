@@ -2,12 +2,18 @@
 #notebook-teminals > header {
   background: #2e3440;
   border: none;
+  border-top: 1px solid #7d8799;  /* trait entre la barre tmux et les onglets Guake */
   box-shadow: none;
-  padding: 0 4px;
+  padding: 0;  /* sans marge : les onglets s'alignent au pixel sur tmux (patch dotfiles-align) */
+}
+#notebook-teminals > header > tabs {
+  margin: 0;  /* le thème Yaru y met 4 px de chaque côté : fausserait l'alignement */
+  padding: 0;
+  border: none;
 }
 #notebook-teminals > header > tabs > tab {
   min-height: 0;
-  padding: 9px 16px;
+  padding: 9px 0;  /* largeur fixée par le patch dotfiles-align */
   margin: 0;
   border: none;
   border-radius: 0;
@@ -16,7 +22,7 @@
   box-shadow: none;
 }
 #notebook-teminals > header > tabs > tab + tab {
-  border-left: 1px solid #5c6370;  /* trait entre onglets, comme le │ de tmux */
+  border-left: 1px solid #7d8799;  /* trait entre onglets, même couleur que le │ de tmux */
 }
 #notebook-teminals > header > tabs > tab:hover {
   color: #dedddA;

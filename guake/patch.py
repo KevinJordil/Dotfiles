@@ -20,6 +20,10 @@ TEXT_FUNCS = """    def set_text(self, text):
 RENAME = "RenameDialog(self.notebook.guake.window, self.label.get_text())"
 ACTION_BOX = "        self.action_box = Gtk.Box(visible=True)\n"
 TERM_INIT = "        super().__init__()\n        self.guake = guake\n        self.configure_terminal()\n"
+NUM_INIT = "        self._name, self.num = text, 0  # dotfiles-num-init : numéro affiché, hors du nom\n"
+RENUM_CONNECT = """        for signal in ("page-added", "page-removed", "page-reordered"):
+            self.connect(signal, _renumber)
+"""
 USER_SET = """            if user_set:
                 setattr(page, "custom_label_set", new_text != "-")
 """
@@ -99,6 +103,67 @@ PATCHES = [
     ("terminal.py", "dotfiles-yalign", TERM_INIT, TERM_INIT
      + "        if hasattr(self, \"set_yalign\"):  # dotfiles-yalign (VTE >= 0.76)\n"
      + "            self.set_yalign(Vte.Align.END)\n"),
+    # nom d'onglet trop long : coupé par "…" au lieu d'élargir l'onglet (nécessaire à l'alignement ci-dessous)
+    ("boxes.py", "dotfiles-ellipsize", NUM_INIT, NUM_INIT
+     + "        self.label.set_ellipsize(3)  # dotfiles-ellipsize (Pango.EllipsizeMode.END)\n"
+     + "        self.label.set_max_width_chars(1)\n"),
+    # onglets Guake alignés sur les onglets tmux : même calcul que ~/.tmux/tabs.sh (colonnes ÷ nombre d'onglets,
+    # 1 colonne par séparateur │), et chaque bord d'onglet Guake tombe sur le pixel du trait │ de tmux.
+    # ponytail: recalcul au redimensionnement et aux changements d'onglets, pas au zoom de la police
+    ("notebook.py", "dotfiles-align", RENUM_CONNECT, RENUM_CONNECT + """
+        # dotfiles-align
+        def _align():
+            self._dotfiles_align_pending = False
+            n = self.get_n_pages()
+            term = next(self.iter_terminals(), None)
+            if not n or term is None:
+                return False
+            cw, cols, total = term.get_char_width(), term.get_column_count(), self.get_allocated_width()
+            avail = cols - (n - 1)
+            if cw <= 0 or total <= 1 or avail < n:
+                return False
+            w, col, edges = avail // n, 0, [0]
+            for _ in range(n - 1):
+                col += w
+                edges.append(col * cw + (cw + 1) // 2)  # pixel où VTE dessine le trait │ de tmux (mesuré)
+                col += 1
+            tabs = [self.get_tab_label(self.get_nth_page(k)) for k in range(n)]
+            if not all(hasattr(t, "set_num") and t.get_mapped() for t in tabs):
+                return False
+            # marges du thème mesurées plutôt que supposées : début du 1er onglet, épaisseur du trait entre onglets
+            xs = [t.translate_coordinates(self, 0, 0)[0] for t in tabs]
+            lead = xs[0]
+            gap = xs[1] - xs[0] - tabs[0].get_allocated_width() if n > 1 else 1
+            starts = [lead] + [edges[k] + gap for k in range(1, n)]
+            for k, tab in enumerate(tabs):
+                last = k == n - 1
+                # chaque onglet s'arrête où commence le trait suivant ; le dernier demande 2 px de moins
+                # et s'étire (tab-expand) pour finir au bord exact, sans jamais déborder
+                width = max((total - 2 if last else edges[k + 1]) - starts[k], 1)
+                if tab.get_size_request()[0] != width:
+                    tab.set_size_request(width, -1)
+                page = self.get_nth_page(k)
+                if self.child_get_property(page, "tab-expand") != last:
+                    self.child_set_property(page, "tab-expand", last)
+            return False
+
+        def _align_soon(*_):
+            if not getattr(self, "_dotfiles_align_pending", False):
+                from gi.repository import GLib
+
+                self._dotfiles_align_pending = True
+                GLib.idle_add(_align)
+
+        for signal in ("page-added", "page-removed", "page-reordered", "size-allocate"):
+            self.connect(signal, _align_soon)
+        _renumber_only = self.dotfiles_renumber
+
+        def _renumber_and_align(*args):
+            _renumber_only(*args)
+            _align_soon()
+
+        self.dotfiles_renumber = _renumber_and_align
+"""),
 ]
 
 pkg = Path(sys.argv[1])

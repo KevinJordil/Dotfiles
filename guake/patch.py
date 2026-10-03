@@ -181,6 +181,75 @@ PATCHES = [
 """.replace("                col += 1\n", "")),
 ]
 
+
+# Migration du patch v2 : libérer les anciennes largeurs avant que GTK ne masque
+# des onglets. Le calcul reste possible lorsque des libellés sont masqués.
+ALIGN_V2 = PATCHES[-2][3].replace(ALIGN_V1, PATCHES[-1][3], 1)
+ALIGN_V3 = ALIGN_V2.replace(
+    "        # dotfiles-align\n",
+    "        # dotfiles-align\n        # dotfiles-align-v3 : réinitialiser les largeurs avant le recalcul\n",
+    1,
+).replace(
+    "            term = next(self.iter_terminals(), None)\n",
+    "            page = self.get_nth_page(self.get_current_page())\n"
+    "            term = next(page.iter_terminals(), None) if page is not None else None\n",
+    1,
+).replace(
+    '        for signal in ("page-added", "page-removed", "page-reordered", "size-allocate"):\n',
+    """        def _reset_tab_widths(*_):
+            for k in range(self.get_n_pages()):
+                page = self.get_nth_page(k)
+                tab = self.get_tab_label(page)
+                if tab is not None:
+                    tab.set_size_request(-1, -1)
+                self.child_set_property(page, "tab-expand", True)
+            _align_soon()
+
+        def _resize_tabs(_, allocation):
+            if allocation.width != getattr(self, "_dotfiles_tabs_width", None):
+                self._dotfiles_tabs_width = allocation.width
+                _reset_tab_widths()
+
+        for signal in ("page-added", "page-removed", "page-reordered"):
+            self.connect(signal, _reset_tab_widths)
+        self.connect("size-allocate", _resize_tabs)
+        for signal in ("page-added", "page-removed", "page-reordered", "size-allocate", "switch-page", "map"):
+""",
+    1,
+).replace(
+    "            _renumber_only(*args)\n            _align_soon()\n",
+    "            _renumber_only(*args)\n            _reset_tab_widths()\n",
+    1,
+)
+ALIGN_V3 = ALIGN_V3.replace(
+    "            if not n or term is None:\n",
+    "            if not n or term is None or not self.get_mapped():\n",
+    1,
+).replace(
+    '            if not all(hasattr(t, "set_num") and t.get_mapped() for t in tabs):\n'
+    '                return False\n',
+    '            if not all(hasattr(t, "set_num") for t in tabs):\n'
+    '                return False\n'
+    '',
+    1,
+)
+ALIGN_V3 = ALIGN_V3.replace(
+    "            xs = [t.translate_coordinates(self, 0, 0)[0] for t in tabs]\n"
+    "            lead = xs[0]\n"
+    "            gap = xs[1] - xs[0] - tabs[0].get_allocated_width() if n > 1 else 1\n",
+    """            if all(t.get_mapped() for t in tabs):
+                xs = [t.translate_coordinates(self, 0, 0)[0] for t in tabs]
+                lead = xs[0]
+                gap = xs[1] - xs[0] - tabs[0].get_allocated_width() if n > 1 else 1
+            else:
+                # gtk.css : aucune marge latérale, séparateur de 1 px.
+                # Les coordonnées d'un onglet masqué ne sont pas exploitables.
+                lead, gap = 0, 1
+""",
+    1,
+)
+PATCHES.append(("notebook.py", "dotfiles-align-v3", ALIGN_V2, ALIGN_V3))
+
 pkg = Path(sys.argv[1])
 for name, marker, old, new in PATCHES:
     f = pkg / name

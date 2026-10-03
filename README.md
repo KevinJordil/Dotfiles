@@ -26,6 +26,20 @@ guake --quit; guake &
 
 Patchs Guake (`guake/patch.py`, avec sudo, sauvegarde `.bak`) : onglets en largeur égale, numéro `[N]` devant le nom des onglets, renommer un onglet renomme aussi son set tmux, barre du haut avec la date et l'heure centrées, pas de boutons à droite des onglets, barre tmux collée aux onglets Guake, onglets Guake alignés au pixel sur les onglets tmux (à nombre d'onglets égal).
 
+## Correction des onglets masqués
+
+Le patch recalcule les largeurs à l'ajout, à la fermeture, au déplacement et au redimensionnement,
+même si GTK a déjà masqué des onglets. Les noms longs sont abrégés pour laisser les onglets visibles.
+Pour appliquer uniquement les patchs Guake après une mise à jour de ce dépôt :
+
+```sh
+sudo python3 ~/dotfiles/guake/patch.py "$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')"
+```
+
+Relance ensuite Guake pour charger le correctif.
+Le test de régression utilise une copie temporaire de Guake, sans modifier l'installation :
+`xvfb-run -a python3 tests/guake-tabs.py` (nécessite GTK 3, VTE, Guake et Xvfb).
+
 ## Usage
 
 - Variables, alias et fonctions propres à un PC (pro, chemins locaux) : dans `~/.zshrc.local`, jamais versionné.

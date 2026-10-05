@@ -249,6 +249,36 @@ ALIGN_V3 = ALIGN_V3.replace(
     1,
 )
 PATCHES.append(("notebook.py", "dotfiles-align-v3", ALIGN_V2, ALIGN_V3))
+# The alignment assumes gtk.css (no margin around the tabs). With the theme margins the tabs would request more
+# than the screen width, which the compositor refuses under Wayland and GDK then crashes.
+MEASURE = "            if all(t.get_mapped() for t in tabs):\n                xs = ["
+PATCHES.append(("notebook.py", "dotfiles-align-guard", MEASURE, """\
+            # dotfiles-align-guard: first tab not at x = 0 -> gtk.css is not loaded, keep the natural widths
+            if tabs[0].get_mapped() and tabs[0].translate_coordinates(self, 0, 0)[0] > 0:
+                for k, tab in enumerate(tabs):
+                    tab.set_size_request(-1, -1)
+                    self.child_set_property(self.get_nth_page(k), "tab-expand", True)
+                return False
+""" + MEASURE))
+# "always on primary" (display-n = -1) under Wayland: GDK has no primary monitor (None) -> crash
+PRIMARY = "                monitor = display.get_primary_monitor()\n\n        return monitor\n"
+PATCHES.append(("utils.py", "dotfiles-wayland-primary", PRIMARY, PRIMARY.replace(
+    "        return monitor\n",
+    "        # dotfiles-wayland-primary: Wayland has no primary monitor (None), fall back to the first one\n"
+    "        return monitor or display.get_monitor(0)\n")))
+# Fullscreen on the configured monitor: a bare fullscreen() lets GNOME pick the monitor under the pointer
+FULLSCREEN = "    def fullscreen(self):\n        self.window.fullscreen()\n"
+PATCHES.append(("utils.py", "dotfiles-fullscreen-monitor", FULLSCREEN, """\
+    def fullscreen(self):
+        # dotfiles-fullscreen-monitor
+        monitor = RectCalculator.get_final_window_monitor(self.settings, self.window)
+        display = self.window.get_display()
+        n = next((i for i in range(display.get_n_monitors()) if display.get_monitor(i) == monitor), None)
+        if n is None:
+            self.window.fullscreen()
+        else:
+            self.window.fullscreen_on_monitor(self.window.get_screen(), n)
+"""))
 
 pkg = Path(sys.argv[1])
 for name, marker, old, new in PATCHES:

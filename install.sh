@@ -6,7 +6,9 @@ D=$(cd "$(dirname "$0")" && pwd)
 echo "== Paquets"
 missing=()
 for p in zsh guake tmux jq xclip git; do command -v $p >/dev/null || missing+=($p); done
-(( ${#missing[@]} )) && sudo apt-get install -y "${missing[@]}"
+if (( ${#missing[@]} )); then
+  if command -v apt-get >/dev/null; then sudo apt-get install -y "${missing[@]}"; else sudo pacman -S --needed --noconfirm "${missing[@]}"; fi
+fi
 
 echo "== Oh My Zsh + Powerlevel10k + zsh-autosuggestions"
 clone() { [[ -d $2 ]] || git clone -q --depth 1 "$1" "$2"; }
@@ -39,10 +41,13 @@ link "$D/zsh/p10k.zsh" ~/.p10k.zsh
 echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"
 gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
+# Guake passe de lui-même en X11 (XWayland), sauf si GUAKE_ENABLE_WAYLAND est défini : en Wayland, GTK 3 plante
+# sur ses menus et le glisser d'onglet, et ne connaît pas l'écran principal
+[[ -z ${GUAKE_ENABLE_WAYLAND:-} ]] || echo "ATTENTION : GUAKE_ENABLE_WAYLAND est défini (/etc/environment ?) : retire-le, puis reconnecte-toi"
 
 echo "== Patchs Guake : onglets en largeur égale, numéros [N], barre date/heure, renommage synchronisé avec tmux (à refaire après une mise à jour de Guake)"
 pkg=$(python3 -c 'import guake,os;print(os.path.dirname(guake.__file__))')
-if grep -q '"tab-expand"' "$pkg/notebook.py" && grep -q 'guake-clock' "$pkg/guake_app.py" && grep -q 'dotfiles-renumber' "$pkg/notebook.py" && grep -q 'dotfiles-tmux-rename' "$pkg/notebook.py" && grep -q 'dotfiles-no-action-box' "$pkg/notebook.py" && grep -q 'dotfiles-yalign' "$pkg/terminal.py" && grep -q 'dotfiles-align-v3' "$pkg/notebook.py" && grep -q 'dotfiles-ellipsize' "$pkg/boxes.py"; then
+if grep -q '"tab-expand"' "$pkg/notebook.py" && grep -q 'guake-clock' "$pkg/guake_app.py" && grep -q 'dotfiles-renumber' "$pkg/notebook.py" && grep -q 'dotfiles-tmux-rename' "$pkg/notebook.py" && grep -q 'dotfiles-no-action-box' "$pkg/notebook.py" && grep -q 'dotfiles-yalign' "$pkg/terminal.py" && grep -q 'dotfiles-align-v3' "$pkg/notebook.py" && grep -q 'dotfiles-ellipsize' "$pkg/boxes.py" && grep -q 'dotfiles-wayland-primary' "$pkg/utils.py" && grep -q 'dotfiles-fullscreen-monitor' "$pkg/utils.py" && grep -q 'dotfiles-align-guard' "$pkg/notebook.py"; then
   echo "déjà appliqués"
 else
   sudo python3 "$D/guake/patch.py" "$pkg"

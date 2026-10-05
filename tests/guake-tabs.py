@@ -1,4 +1,4 @@
-"""Régression GTK réelle : xvfb-run -a python3 tests/guake-tabs.py.
+"""Régression GTK réelle : xvfb-run -a python3 tests/guake-tabs.py [--no-css].
 
 Utilise une copie du paquet Guake installé ; ne modifie pas le système.
 """
@@ -16,7 +16,7 @@ from gi.repository import Gtk, Gdk, Vte, Pango
 repo = Path(__file__).resolve().parents[1]
 pkg = Path(importlib.util.find_spec("guake").origin).parent
 fixture = tempfile.TemporaryDirectory(prefix="guake-tabs-")
-for name in ("notebook.py", "boxes.py", "terminal.py", "guake_app.py"):
+for name in ("notebook.py", "boxes.py", "terminal.py", "guake_app.py", "utils.py"):
     shutil.copy2(pkg / name, Path(fixture.name) / name)
 subprocess.run([sys.executable, str(repo / "guake/patch.py"), fixture.name], check=True)
 src = (Path(fixture.name) / "notebook.py").read_text()
@@ -54,9 +54,12 @@ class Notebook(Gtk.Notebook):
     def iter_terminals(self):
         for k in range(self.get_n_pages()):
             yield from self.get_nth_page(k).iter_terminals()
-provider = Gtk.CssProvider()
-provider.load_from_path(str(repo / 'gtk/gtk.css'))
-Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+# --no-css: theme margins (gtk.css not installed) must never make the tabs wider than the window
+css = '--no-css' not in sys.argv
+if css:
+    provider = Gtk.CssProvider()
+    provider.load_from_path(str(repo / 'gtk/gtk.css'))
+    Gtk.StyleContext.add_provider_for_screen(Gdk.Screen.get_default(), provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
 window = Gtk.Window()
 window.set_default_size(1000, 400)
 nb = Notebook()
@@ -73,7 +76,8 @@ def check(label):
     mapped = sum(t.get_mapped() for t in tabs)
     widths = [t.get_allocated_width() for t in tabs]
     print(label, 'visible', mapped, '/', len(tabs), 'widths', widths)
-    assert mapped == len(tabs), label
+    assert nb.get_preferred_width()[0] <= nb.get_allocated_width(), label
+    assert mapped == len(tabs) or not css, label
     assert all(t.translate_coordinates(nb, 0, 0)[0] + t.get_allocated_width() <= nb.get_allocated_width() for t in tabs), label
 for n in range(1, 9):
     p, tab = Page(), Tab('Un nom de terminal très long ' * 4)

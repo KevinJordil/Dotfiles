@@ -2,7 +2,14 @@
 # Le set porte le nom de l'onglet (tab<N> si sans nom) → après redémarrage, l'onglet retrouve son set restauré (resurrect)
 if [[ -n $GUAKE_TAB_UUID && -z $TMUX ]]; then
   export SHELL=${commands[zsh]}  # tmux ouvre $SHELL : encore bash après chsh tant que la session n'est pas relancée
-  _i=$(guake -x $GUAKE_TAB_UUID 2>/dev/null)
+  # position de l'onglet, demandée directement au bus D-Bus : `guake -x` lancerait une 2e instance de Guake si
+  # celui-ci n'est pas encore prêt (démarrage du PC). On réessaie jusqu'à 10 s, le temps que Guake s'enregistre.
+  for _t in {1..100}; do
+    _i=$(gdbus call --session --timeout 2 --dest org.guake3.RemoteControl --object-path /org/guake3/RemoteControl \
+      --method org.guake3.RemoteControl.get_index_from_uuid "$GUAKE_TAB_UUID" 2>/dev/null) && _i=${${_i#\(}%%,*}
+    [[ $_i == <-> ]] && break
+    sleep 0.1
+  done
   if [[ $_i == <-> ]]; then
     _s=$(jq -r ".workspace[\"0\"][0][$_i] | select(.custom_label_set) | .label" ~/.config/guake/session.json 2>/dev/null)
     _s=${_s:-tab$_i}

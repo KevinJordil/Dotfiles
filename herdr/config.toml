@@ -1,0 +1,42 @@
+# herdr : onglets principaux = workspaces (sidebar), sous-onglets = tabs.
+# Thème de herdr.dev : catppuccin + accent mauve ; Guake assorti (palette Catppuccin Mocha, fond #11111b opaque)
+onboarding = false
+
+[theme]
+name = "catppuccin"
+
+[theme.custom]
+accent = "#cba6f7"
+sidebar_bg = "#181825"
+surface0 = "#1e1e2e"  # tabs inactifs sans pavé (comme herdr.dev)
+panel_bg = "#1e1e2e"  # barre des tabs
+
+[terminal]
+new_cwd = "follow"  # nouveau tab/pane dans le dossier courant
+
+[keys]
+switch_tab = "alt+1..9"
+switch_workspace = "ctrl+alt+1..9"
+
+[ui]
+prompt_new_tab_name = false
+# date/heure (Ghostty n'a pas la barre de Guake), précédée d'un trait : herdr ne permet pas de lui donner un autre fond
+tab_bar_right = [{ type = "text", text = "│" }, { type = "datetime", format = "%a %d.%m.%Y %H:%M:%S " }]
+sidebar_width = 34  # place pour le titre des sessions Claude
+
+# sidebar comme herdr.dev : une ligne vide entre les entrées, agents en « état · agent »
+[ui.sidebar.spaces]
+row_gap = 1
+
+[ui.sidebar.agents]
+# en blanc : space · tab (séparateur « · » imposé par herdr)
+row_gap = 1
+rows = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["state_text", "agent"]]
+
+# Claude : titre de la session sous « space · tab » (titre du terminal posé par Claude Code)
+[ui.sidebar.agents.rows_by_agent]
+claude = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["terminal_title_stripped"], ["state_text", "agent"]]
+
+[experimental]
+kitty_graphics = true
+pane_history = true  # contenu des panes conservé après redémarrage

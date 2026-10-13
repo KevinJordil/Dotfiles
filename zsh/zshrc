@@ -1,5 +1,5 @@
-# Guake + tmux : doit rester en tête (exec tmux avant tout le reste)
-source ~/dotfiles/zsh/guake-tmux.zsh
+# Guake → herdr : doit rester en tête (exec herdr avant tout le reste)
+source ~/dotfiles/zsh/herdr.zsh
 
 # Powerlevel10k instant prompt : rester près du haut ; ce qui demande une saisie doit être au-dessus.
 if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]; then

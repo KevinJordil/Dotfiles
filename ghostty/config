@@ -1,0 +1,7 @@
+# Ghostty : fenêtre de la console herdr (affichée/masquée par bin/console). Assorti au thème herdr.dev.
+theme = Catppuccin Mocha
+background = #11111b
+font-family = Roboto Mono
+font-size = 11
+window-decoration = false
+confirm-close-surface = false

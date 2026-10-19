@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Touche console : affiche/masque la fenêtre Ghostty qui héberge herdr, comme `guake -t`.
 # Lancée par un raccourci GNOME. Wnck (X11) suffit : pas besoin de xdotool.
-import subprocess, time, gi
+import os, subprocess, time, gi
 gi.require_version('Gdk', '3.0'); gi.require_version('GdkX11', '3.0'); gi.require_version('Wnck', '3.0')
 from gi.repository import Gdk, GdkX11, Wnck
 
@@ -17,7 +17,14 @@ def pointer_monitor():
     _, x, y = display.get_default_seat().get_pointer().get_position()
     return display.get_monitor_at_point(x, y).get_geometry()
 
+def middle_paste(win):  # clic molette = coller : (re)lancé à chaque affichage, l'ouverture peut dépasser l'attente
+    xid = str(win.get_xid())
+    if subprocess.run(['pgrep', '-f', f'middle-paste {xid}$'], stdout=subprocess.DEVNULL).returncode:
+        subprocess.Popen([os.path.join(os.path.dirname(os.path.realpath(__file__)), 'middle-paste'), xid],
+                         start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 def show(win):
+    middle_paste(win)
     ws = screen.get_active_workspace()
     if ws and not win.is_on_workspace(ws):
         win.move_to_workspace(ws)

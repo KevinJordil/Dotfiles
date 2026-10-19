@@ -33,9 +33,10 @@ row_gap = 1
 row_gap = 1
 rows = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["state_text", "agent"]]
 
-# Claude : titre de la session sous « space · tab » (titre du terminal posé par Claude Code)
+# Claude : titre de la session sous « space · tab » (titre du terminal posé par Claude Code),
+# et shells encore ouverts ($shells, rempli par bin/herdr-shells)
 [ui.sidebar.agents.rows_by_agent]
-claude = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["terminal_title_stripped"], ["state_text", "agent"]]
+claude = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["terminal_title_stripped"], ["state_text", "agent", { token = "$shells", fg = "#fab387" }]]
 
 [experimental]
 kitty_graphics = true

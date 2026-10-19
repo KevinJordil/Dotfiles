@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Sidebar herdr : shells encore ouverts par chaque agent Claude (tâches Bash, souvent en arrière-plan,
+# alors que l'agent affiche idle) → token $shells. Lancé une fois par zsh/herdr.zsh, s'arrête avec le serveur herdr.
+set -o pipefail
+while panes=$(herdr agent list 2>/dev/null | jq -r '.result.agents[] | select(.agent == "claude") | .pane_id'); do
+  for p in $panes; do
+    pid=$(herdr pane process-info --pane "$p" | jq -r '[.result.process_info.foreground_processes[] | select(.name == "claude")][0].pid // empty')
+    n=$([[ $pid ]] && pgrep -c -P "$pid" -f shell-snapshots)
+    herdr pane report-metadata "$p" --source user:shells --token "shells=$( ((n)) && echo "$n shell$( ((n > 1)) && echo s)")" >/dev/null
+  done
+  sleep 2
+done

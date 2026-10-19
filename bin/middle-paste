@@ -1,0 +1,25 @@
+#!/usr/bin/env python3
+# Clic molette dans la console = coller le presse-papier (comme l'ancienne config tmux).
+# herdr capture la souris et ignore le clic molette ; on l'intercepte sur la fenêtre Ghostty
+# et on envoie Ctrl+Shift+V (paste_from_clipboard de Ghostty). Lancé par bin/console, s'arrête avec la fenêtre.
+# Usage : middle-paste <xid de la fenêtre>
+import sys
+from Xlib import X, XK, display
+from Xlib.ext import xtest
+
+d = display.Display()
+win = d.create_resource_object('window', int(sys.argv[1], 0))
+win.change_attributes(event_mask=X.StructureNotifyMask)
+win.grab_button(2, X.AnyModifier, False, X.ButtonPressMask | X.ButtonReleaseMask, X.GrabModeAsync, X.GrabModeAsync, X.NONE, X.NONE)
+keys = [d.keysym_to_keycode(XK.string_to_keysym(k)) for k in ('Control_L', 'Shift_L', 'v')]
+
+while True:
+    e = d.next_event()
+    if e.type == X.DestroyNotify:
+        break
+    if e.type == X.ButtonRelease and e.detail == 2:
+        for k in keys:
+            xtest.fake_input(d, X.KeyPress, k)
+        for k in reversed(keys):
+            xtest.fake_input(d, X.KeyRelease, k)
+        d.sync()

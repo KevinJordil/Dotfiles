@@ -6,6 +6,7 @@ D=$(cd "$(dirname "$0")" && pwd)
 echo "== Paquets"
 missing=()
 for p in zsh guake jq curl git; do command -v $p >/dev/null || missing+=($p); done
+python3 -c 'import Xlib' 2>/dev/null || missing+=(python3-xlib)  # bin/middle-paste
 (( ${#missing[@]} )) && sudo apt-get install -y "${missing[@]}"
 
 echo "== herdr + navigateur (terminal-browser) + VS Code (tode) dans un pane"

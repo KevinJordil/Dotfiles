@@ -1,5 +1,5 @@
 # Guake : son unique onglet lance herdr (onglets principaux = workspaces, sous-onglets = tabs)
-[[ -n $GUAKE_TAB_UUID && -z $HERDR_ENV ]] && exec herdr
+[[ -n $GUAKE_TAB_UUID && -z $HERDR_ENV ]] && (( $+commands[herdr] )) && exec herdr  # herdr absent : un exec raté fermerait le shell
 
 if [[ -n $HERDR_ENV ]]; then
   # Historique par onglet principal (workspace) ; il suit le renommage, le nouveau part de l'ancien

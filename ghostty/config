@@ -5,3 +5,8 @@ font-family = Roboto Mono
 font-size = 11
 window-decoration = false
 confirm-close-surface = false
+# Onglets, fenêtres et splits : gérés par herdr. Ceux de Ghostty sont désactivés (les touches passent à herdr)
+keybind = ctrl+shift+t=unbind
+keybind = ctrl+shift+n=unbind
+keybind = ctrl+shift+o=unbind
+keybind = ctrl+shift+e=unbind

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Installe l'environnement Ghostty/Guake + herdr (Ubuntu). Relançable sans risque : chaque étape vérifie avant d'agir.
+# Usage : ./install.sh console|fenetre
+#   console : touche ² → console plein écran par-dessus tout (affichée/masquée, hors dock)
+#   fenetre : icône « Console » dans le dock → fenêtre normale agrandie (bordure, réduire, fermer)
 set -euo pipefail
+MODE=${1:-}
+[[ $MODE == console || $MODE == fenetre ]] || { echo "Usage : $0 console|fenetre (console : touche ² plein écran ; fenetre : icône du dock, fenêtre normale)"; exit 1; }
 D=$(cd "$(dirname "$0")" && pwd)
 mkdir -p ~/.local/bin && export PATH=~/.local/bin:$PATH  # herdr, starship, tode… : visibles dès cette exécution
 [[ ${XDG_SESSION_TYPE:-x11} == x11 ]] || echo "!! Session $XDG_SESSION_TYPE : bin/console et le clic molette demandent X11 (« Ubuntu sur Xorg », roue dentée à l'écran de connexion)"
@@ -45,11 +50,7 @@ link "$D/herdr/config.toml" ~/.config/herdr/config.toml
 link "$D/ghostty/config" ~/.config/ghostty/config
 link "$D/zsh/zshrc" ~/.zshrc  # réglages propres au PC : ~/.zshrc.local (hors repo)
 
-echo "== Réglages Guake"
-dconf load /org/guake/ < "$D/guake/guake.dconf"
-gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
-
-echo "== Raccourcis GNOME : ² → console Ghostty (bin/console), * du pavé numérique → Guake"
+echo "== Mode $MODE"
 K=org.gnome.settings-daemon.plugins.media-keys
 P=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
 shortcut() {  # shortcut <customN> <nom> <commande> <touche>
@@ -62,7 +63,32 @@ shortcut() {  # shortcut <customN> <nom> <commande> <touche>
   [[ $l == "[" ]] && l="['$P/$1/']" || l="$l, '$P/$1/']"
   gsettings set $K custom-keybindings "$l"
 }
-shortcut custom0 guake 'env GDK_BACKEND=x11 guake -t' KP_Multiply
-shortcut custom1 'console ghostty' "$D/bin/console" section
+shortcut custom0 guake 'env GDK_BACKEND=x11 guake -t' KP_Multiply  # * du pavé numérique → Guake (transition)
+fav=$(gsettings get org.gnome.shell favorite-apps)
+L=~/.local/share/applications/console.desktop
+if [[ $MODE == console ]]; then  # l'autre mode est retiré : on peut changer de mode en relançant le script
+  shortcut custom1 'console ghostty' "$D/bin/console" section
+  rm -f $L
+  gsettings set org.gnome.shell favorite-apps "$(sed "s/, 'console.desktop'//; s/'console.desktop', \?//; s/'console.desktop'//" <<<"$fav")"
+else
+  shortcut custom1 'console ghostty' "$D/bin/console" ''  # ² désactivée
+  mkdir -p ~/.local/share/applications
+  cat > $L <<EOF
+[Desktop Entry]
+Type=Application
+Name=Console
+Comment=herdr dans une fenêtre normale
+Exec=$D/bin/console --window
+Icon=com.mitchellh.ghostty
+Terminal=false
+StartupWMClass=ch.dotfiles.window
+Categories=System;TerminalEmulator;
+EOF
+  [[ $fav == *console.desktop* ]] || gsettings set org.gnome.shell favorite-apps "${fav%]}, 'console.desktop']"
+fi
 
-echo "OK. Déconnecte-toi puis reconnecte-toi (shell zsh, ~/.local/bin dans le PATH du raccourci ²), puis touche ²."
+echo "== Réglages Guake"
+dconf load /org/guake/ < "$D/guake/guake.dconf"
+gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
+
+echo "OK. Déconnecte-toi puis reconnecte-toi (shell zsh, ~/.local/bin dans le PATH), puis $([[ $MODE == console ]] && echo "touche ²" || echo "icône « Console » du dock")."

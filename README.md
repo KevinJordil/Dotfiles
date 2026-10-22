@@ -7,19 +7,19 @@ Guake reste disponible sur `*` du pavé numérique, le temps de la transition (m
 ## Installer (Ubuntu)
 
 ```sh
-git clone <ce repo> ~/dotfiles && ~/dotfiles/install.sh
+git clone <ce repo> ~/dotfiles && ~/dotfiles/install.sh console   # ou : fenetre
 ```
 
 Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran de connexion) : la console et le clic molette passent par Wnck/Xlib. Se déconnecter puis se reconnecter après l'installation.
 
-`install.sh` installe Ghostty (PPA `mkasberg/ghostty-ubuntu`) + zsh + Oh My Zsh + Starship + zsh-autosuggestions + herdr + terminal-browser + tode, crée les raccourcis GNOME (`²` → Ghostty, `*` → Guake), et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque.
+`install.sh` installe Ghostty (PPA `mkasberg/ghostty-ubuntu`) + zsh + Oh My Zsh + Starship + zsh-autosuggestions + herdr + terminal-browser + tode, installe le mode choisi (obligatoire) — `console` : touche `²` → console plein écran par-dessus tout ; `fenetre` : icône « Console » dans le dock → fenêtre normale agrandie (bordure, réduire, fermer) — plus `*` → Guake, et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque, aussi pour changer de mode (l'autre est retiré).
 
 ## Contenu
 
 | Fichier | Rôle | Installé en |
 |---|---|---|
 | `herdr/config.toml` | thème Catppuccin, raccourcis, date/heure dans la barre des tabs, sidebar (titre des sessions Claude, shells encore ouverts), cwd suivi | `~/.config/herdr/config.toml` (lien) |
-| `bin/console` | affiche/masque la console Ghostty (touche `²`), plein écran sur l'écran de la souris, hors barre des tâches | appelé par le raccourci GNOME |
+| `bin/console` | affiche/masque la console Ghostty (touche `²`), plein écran sur l'écran de la souris, hors barre des tâches ; `--window` : même session dans une fenêtre normale agrandie (lanceur « Console » du dock) | appelé par le raccourci GNOME |
 | `bin/middle-paste` | clic molette dans la console = coller le presse-papier (herdr ignore ce clic) | lancé par `bin/console` |
 | `bin/herdr-shells` | nombre de shells encore ouverts par chaque agent Claude (tâches en arrière-plan) → token `$shells` de la sidebar | lancé par `zsh/herdr.zsh` |
 | `ghostty/config` | police Roboto Mono, Catppuccin Mocha, fond `#11111b`, sans décoration | `~/.config/ghostty/config` (lien) |

@@ -18,10 +18,12 @@ Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran d
 
 | Fichier | Rôle | Installé en |
 |---|---|---|
-| `herdr/config.toml` | thème Catppuccin, raccourcis, date/heure dans la barre des tabs, sidebar (titre des sessions Claude, shells encore ouverts), cwd suivi | `~/.config/herdr/config.toml` (lien) |
+| `herdr/config.toml` | thème Catppuccin, raccourcis, date/heure dans la barre des tabs, sidebar des agents Claude (voir `bin/herdr-agents`), `Ctrl+B Shift+←/→` déplace un tab, cwd suivi | `~/.config/herdr/config.toml` (lien) |
 | `bin/console` | affiche/masque la console Ghostty (touche `²`), plein écran sur l'écran de la souris, hors barre des tâches ; `--window` : même session dans une fenêtre normale agrandie (lanceur « Console » du dock) | appelé par le raccourci GNOME |
 | `bin/middle-paste` | clic molette dans la console = coller le presse-papier (herdr ignore ce clic) | lancé par `bin/console` |
-| `bin/herdr-shells` | nombre de shells encore ouverts par chaque agent Claude (tâches en arrière-plan) → token `$shells` de la sidebar | lancé par `zsh/herdr.zsh` |
+| `bin/herdr-agents` | sidebar des agents Claude : sujet de la session coloré selon l'état (blanc idle, vert fini, rouge bloqué, jaune en cours, avec spinner), dernière demande, sous-agents et shells encore ouverts | lancé par `zsh/herdr.zsh` |
+| `bin/agent-subagents` | hooks Claude Code `SubagentStart` / `SubagentStop` : sous-agents en cours, comptés dans la sidebar | `~/.claude/settings.json` (par `install.sh`) |
+| `bin/agent-summary` | hook Claude Code `UserPromptSubmit` : Haiku résume en arrière-plan le sujet de la session (adapté à chaque demande) et la dernière demande | `~/.claude/settings.json` (par `install.sh`) |
 | `ghostty/config` | police Roboto Mono, Catppuccin Mocha, fond `#11111b`, sans décoration | `~/.config/ghostty/config` (lien) |
 | `guake/guake.dconf` | réglages Guake (transition) : un seul onglet, plein écran, mêmes couleurs, touche `*` | chargé avec `dconf load` |
 | `zsh/herdr.zsh` | lance herdr dans Guake (Ghostty le lance directement), historique par onglet principal, nom auto des sous-onglets (`dossier·programme`), fonction `nom` | sourcé en tête de `zsh/zshrc` |

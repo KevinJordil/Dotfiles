@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Sidebar herdr, pour chaque agent Claude :
+#   ligne 1 : icône d'état + sujet de la session (31 car. max), dans un token par état pour la couleur
+#             (herdr/config.toml) : $t_idle ●, $t_done ✔, $t_blocked ✘, $t_working spinner (0,25 s), $t_unknown ?
+#             Icône et sujet dans le même token : entre deux tokens, herdr insère « · »
+#   ligne 2 : $last, dernière demande (31 car. max)
+#             Sujet et dernière demande générés par bin/agent-summary, sinon titre du terminal
+#   ligne 3 : $subagents (bin/agent-subagents) et $shells, shells encore ouverts (tâches Bash en arrière-plan)
+# done = idle et pas encore vu : herdr ne l'expose pas, on le déduit (nouvelle complétion depuis le dernier focus du pane).
+# Lancé une fois par zsh/herdr.zsh, s'arrête avec le serveur herdr.
+set -o pipefail
+D=~/.cache/herdr-agents
+FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+declare -A ICON=([idle]=● [done]=✔ [blocked]=✘ [unknown]=?)
+cut() { ((${#1} > $2)) && echo "${1:0:$2-1}…" || echo "$1"; }
+plural() { (($1)) && echo "$1 $2$( (($1 > 1)) && echo s)"; }
+declare -A seen
+f=0
+while agents=$(herdr agent list 2>/dev/null | jq -r '.result.agents[] | select(.agent == "claude")
+    | [.pane_id, .agent_session.value // "-", .terminal_title_stripped // "", .agent_status // "unknown", .completion_seq // 0, .focused] | @tsv'); do
+  working=() wtitle=()
+  while IFS=$'\t' read -r p sid term status cseq focused; do
+    [[ $p ]] || continue
+    [[ -v seen[$p] && $focused != true ]] || seen[$p]=$cseq  # au démarrage, tout est considéré comme vu
+    [[ $status == idle ]] && ((cseq > seen[$p])) && status=done
+    pid=$(herdr pane process-info --pane "$p" </dev/null | jq -r '[.result.process_info.foreground_processes[] | select(.name == "claude")][0].pid // empty')
+    n=$([[ $pid ]] && pgrep -c -P "$pid" -f shell-snapshots)
+    # ponytail: un sous-agent tué sans SubagentStop resterait compté ; ignoré après 2 h
+    sub=$(find "$D/$sid.sub" -type f -mmin -120 2>/dev/null | wc -l)
+    title=$(cut "$(cat "$D/$sid.title" 2>/dev/null || echo "$term")" 31)
+    [[ $status == working ]] && working+=("$p") wtitle+=("$title")
+    last=$(cut "$(cat "$D/$sid.last" 2>/dev/null)" 31)
+    args=()
+    for s in idle done blocked working unknown; do
+      args+=(--token "t_$s=$([[ $s == "$status" ]] && echo "${ICON[$s]:-${FRAMES[f % 10]}} $title")")
+    done
+    herdr pane report-metadata "$p" --source user:agents --clear-state-labels --clear-token title --clear-token spin "${args[@]}" \
+      --token "last=$last" \
+      --token "subagents=$(plural "$sub" sous-agent)" --token "shells=$(plural "$n" shell)" </dev/null >/dev/null
+  done <<<"$agents"
+  for _ in {1..8}; do  # 2 s, spinner rafraîchi toutes les 0,25 s
+    for i in "${!working[@]}"; do
+      herdr pane report-metadata "${working[i]}" --source user:agents --token "t_working=${FRAMES[f % 10]} ${wtitle[i]}" >/dev/null
+    done
+    ((f++))
+    sleep 0.25
+  done
+done

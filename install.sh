@@ -26,7 +26,14 @@ echo "== herdr + navigateur (terminal-browser) + VS Code (tode) dans un pane"
 command -v herdr >/dev/null || [[ -x ~/.local/bin/herdr ]] || curl -fsSL https://herdr.dev/install.sh | sh
 [[ -x ~/.local/bin/terminal-browser ]] || curl -fsSL https://terminal-browser.sh/install | TERMINAL_BROWSER_SKIP_SETUP=1 bash
 [[ -x ~/.local/bin/tode ]] || curl -fsSL https://tode.sh/install | bash
-command -v claude >/dev/null && herdr integration install claude  # état des agents Claude dans la sidebar, reprise au redémarrage
+if command -v claude >/dev/null; then
+  herdr integration install claude  # état des agents Claude dans la sidebar, reprise au redémarrage
+  # sidebar : sujet et dernière demande résumés par Haiku (bin/agent-summary), sous-agents en cours (bin/agent-subagents)
+  S=~/.claude/settings.json; [[ -f $S ]] || echo '{}' >$S
+  grep -q agent-summary $S || { jq --arg c "$D/bin/agent-summary" '.hooks.UserPromptSubmit += [{hooks: [{type: "command", command: $c}]}]' $S >$S.tmp && mv $S.tmp $S; }
+  grep -q agent-subagents $S || { jq --arg c "$D/bin/agent-subagents" '.hooks.SubagentStart += [{hooks: [{type: "command", command: "\($c) start"}]}]
+    | .hooks.SubagentStop += [{hooks: [{type: "command", command: "\($c) stop"}]}]' $S >$S.tmp && mv $S.tmp $S; }
+fi
 
 echo "== Oh My Zsh + Starship + zsh-autosuggestions"
 clone() { [[ -d $2 ]] || git clone -q --depth 1 "$1" "$2"; }

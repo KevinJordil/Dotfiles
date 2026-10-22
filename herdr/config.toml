@@ -17,6 +17,8 @@ new_cwd = "follow"  # nouveau tab/pane dans le dossier courant
 [keys]
 switch_tab = "alt+1..9"
 switch_workspace = "ctrl+alt+1..9"
+move_tab_previous = "prefix+shift+left"  # réordonner les tabs (et donc les agents)
+move_tab_next = "prefix+shift+right"
 
 [ui]
 prompt_new_tab_name = false
@@ -33,10 +35,16 @@ row_gap = 1
 row_gap = 1
 rows = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["state_text", "agent"]]
 
-# Claude : titre de la session sous « space · tab » (titre du terminal posé par Claude Code),
-# et shells encore ouverts ($shells, rempli par bin/herdr-shells)
+# Claude, 3 lignes (tokens envoyés par bin/herdr-agents) :
+#   icône d'état + sujet de la session : blanc ● idle, orange spinner en cours, rouge ✘ bloqué, vert ✔ fini ;
+#   dernière demande ; sous-agents et shells encore ouverts.
 [ui.sidebar.agents.rows_by_agent]
-claude = [["state_icon", { token = "workspace", fg = "#ffffff" }, { token = "tab", fg = "#ffffff" }], ["terminal_title_stripped"], ["state_text", "agent", { token = "$shells", fg = "#fab387" }]]
+claude = [
+  [{ token = "$t_idle", fg = "#ffffff", bold = false }, { token = "$t_working", fg = "#fab387" },
+   { token = "$t_blocked", fg = "#f38ba8", bold = true }, { token = "$t_done", fg = "#a6e3a1", bold = true }, { token = "$t_unknown", dim = true }],
+  [{ token = "$last", fg = "#bac2de", bold = false, dim = false }],
+  [{ token = "$subagents", fg = "#cba6f7" }, { token = "$shells", fg = "#fab387" }],
+]
 
 [experimental]
 kitty_graphics = true

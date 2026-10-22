@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Hook Claude Code UserPromptSubmit : Haiku nomme, en arrière-plan, le projet de la session (repo et à quoi il sert,
+# ex. « Console Herdr ») et résume la dernière demande : 10 à 31 caractères chacun, idéalement ~20
+# → ~/.cache/herdr-agents/<session>.{title,last}, affichés dans la sidebar par bin/herdr-agents.
+[[ $AGENT_SUMMARY ]] && exit 0  # appel à Haiku ci-dessous : pas de récursion
+export LC_ALL=C.UTF-8  # ${#x} en caractères, pas en octets
+in=$(cat)
+sid=$(jq -r .session_id <<<"$in")
+prompt=$(jq -r '.prompt[0:2000]' <<<"$in")
+cwd=$(jq -r .cwd <<<"$in")
+repo=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)
+# contexte : demandes précédentes de la session (hors sous-agents et messages internes) et titre donné par Claude Code
+prompts=$(jq -r 'select(.type == "user" and .isSidechain != true and .isMeta != true and (.message.content | type) == "string")
+  | .message.content | select(startswith("<") or startswith("This session is being continued") | not) | .[0:1500] | gsub("\n"; " ")' \
+  "$(jq -r .transcript_path <<<"$in")" 2>/dev/null | grep -vxF -- "$(head -c 1500 <<<"$prompt" | tr '\n' ' ')")
+first=$(head -1 <<<"$prompts")  # souvent la demande qui pose le sujet de la session : gardée en entier
+before=$(tail -n +2 <<<"$prompts" | tail -3 | cut -c1-300)
+root=${repo:-$cwd}
+# contexte du projet pour le titre : README ou CLAUDE.md, sinon contenu du dossier
+about=$(cat "$root/README.md" "$root/CLAUDE.md" 2>/dev/null | head -c 600 | tr '\n' ' ')
+D=~/.cache/herdr-agents
+mkdir -p "$D"
+
+ask() {
+  printf '%s\n' "Tu nommes une session de travail d'un développeur. Titre actuel : « $(cat "$D/$sid.title" 2>/dev/null || echo aucun) »." \
+    "Projet : dossier $root${repo:+ (repo git ${repo##*/})}." \
+    "${about:+Début du README / CLAUDE.md : « $about ».}" \
+    "Contenu du dossier : $(ls "$root" 2>/dev/null | head -25 | tr '\n' ' ')" \
+    "Première demande de la session : « ${first:-aucune} »." \
+    "Demandes suivantes :" "${before:-aucune}" \
+    "Nouvelle demande : « $prompt »." \
+    "Réponds en français, exactement deux lignes, sans guillemets ni ponctuation finale ni numéro :" \
+    "ligne 1 = le titre de la session, en deux parties : le projet (ce qu'il est : application, firmware, outil, extension… et son domaine, déduit du dossier, du README et du contenu), puis le thème de fond de la session quand les demandes en posent un, souvent un nom technique qui revient (protocole, fonctionnalité, composant : ex. Kafka, OAuth, MQTT) ; jamais une petite tâche ni un verbe, stable pour toute la session ; s'il est dans le dossier personnel, le projet visé par les demandes ; de 10 à 31 caractères espaces compris, idéalement une vingtaine (ex. : Backend OnSphere Kafka, Console Herdr, Extension GNOME ERP)" \
+    "ligne 2 = la nouvelle demande en mots simples, de 10 à 31 caractères espaces compris, idéalement une vingtaine, un verbe à l'infinitif et son objet, sans détail (ex. : Ajouter couleur des agents)." \
+    "$1" |
+    env -u HERDR_ENV AGENT_SUMMARY=1 timeout 60 claude -p --model haiku --no-session-persistence --tools "" |
+    sed -E 's/^(ligne|line) ?[12] ?[:=] ?//I'  # Haiku recopie parfois « Ligne 1 : »
+}
+fit() {  # dernier recours : coupe au dernier mot entier qui tient
+  local s=$1
+  while ((${#s} > $2)); do [[ $s == *" "* ]] && s=${s% *} || s=${s:0:$2}; done
+  echo "$s"
+}
+
+(
+  for _ in 1 2 3; do
+    out=$(ask "$retry")
+    title=$(sed -n 1p <<<"$out") last=$(sed -n 2p <<<"$out")
+    ((${#title} >= 10 && ${#title} <= 31 && ${#last} >= 10 && ${#last} <= 31)) && break
+    retry="Ta réponse précédente (« $title » / « $last ») ne respectait pas les longueurs : chaque ligne de 10 à 31 caractères, idéalement une vingtaine."
+  done
+  [[ $title && $last ]] || exit
+  fit "$title" 31 >"$D/$sid.title"
+  fit "$last" 31 >"$D/$sid.last"
+) </dev/null >/dev/null 2>&1 &
+disown

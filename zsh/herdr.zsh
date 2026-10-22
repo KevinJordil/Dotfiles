@@ -27,8 +27,8 @@ if [[ -n $HERDR_ENV ]]; then
   add-zsh-hook precmd _tab_idle
   add-zsh-hook preexec _tab_run
 
-  # Shells encore ouverts par les agents Claude dans la sidebar : un seul compteur par session (verrou)
-  ( flock -n 9 && exec ~/dotfiles/bin/herdr-shells ) 9>${XDG_RUNTIME_DIR:-/tmp}/herdr-shells.lock &!
+  # Sidebar des agents Claude (titre, dernière demande, shells, état fini) : un seul script par session (verrou)
+  ( flock -n 9 && exec ~/dotfiles/bin/herdr-agents ) 9>${XDG_RUNTIME_DIR:-/tmp}/herdr-agents.lock &!
 
   # nom <x> : renomme l'onglet principal (l'historique suit au prompt suivant)
   nom() { herdr workspace rename $HERDR_WORKSPACE_ID "$1" >/dev/null; }

@@ -36,7 +36,7 @@ window-tabbar=true
 window-width=100
 
 [keybindings/global]
-show-hide='KP_Multiply'
+show-hide='F12'
 
 [keybindings/local]
 switch-tab1='disabled'

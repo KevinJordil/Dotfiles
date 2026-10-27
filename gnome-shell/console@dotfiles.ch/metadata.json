@@ -1,0 +1,7 @@
+{
+  "uuid": "console@dotfiles.ch",
+  "name": "Console herdr",
+  "description": "Place et affiche/masque la fenêtre Ghostty qui héberge herdr, appelée en D-Bus par bin/console. En Wayland, seul le Shell peut déplacer ou activer la fenêtre d'un autre client.",
+  "url": "https://github.com/kevinjordil/dotfiles",
+  "shell-version": ["42", "43", "44"]
+}

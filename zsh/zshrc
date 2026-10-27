@@ -1,7 +1,11 @@
 export PATH=$HOME/.local/bin:$PATH  # herdr, starship : avant herdr.zsh
 
+# Racine du repo déduite du lien ~/.zshrc (install.sh le fait pointer sur $D/zsh/zshrc) : le dossier
+# cloné peut s'appeler dotfiles, Dotfiles… et Linux distingue la casse.
+export DOTFILES=${${(%):-%N}:A:h:h}
+
 # Guake → herdr : doit rester en tête (exec herdr avant tout le reste)
-source ~/dotfiles/zsh/herdr.zsh
+source $DOTFILES/zsh/herdr.zsh
 
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME=""  # prompt : Starship (en fin de fichier)
@@ -11,6 +15,6 @@ source $ZSH/oh-my-zsh.sh
 # Réglages propres à ce PC (variables, alias, fonctions pro) : hors repo
 [[ ! -f ~/.zshrc.local ]] || source ~/.zshrc.local
 
-# Prompt Starship : config dans ~/dotfiles/zsh/starship.toml
-export STARSHIP_CONFIG=~/dotfiles/zsh/starship.toml
+# Prompt Starship : config dans $DOTFILES/zsh/starship.toml
+export STARSHIP_CONFIG=$DOTFILES/zsh/starship.toml
 eval "$(starship init zsh)"

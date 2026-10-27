@@ -1,81 +1,47 @@
 #!/usr/bin/env python3
 # Touche console : affiche/masque la fenêtre Ghostty qui héberge herdr, comme `guake -t`.
-# Lancée par un raccourci GNOME. Wnck (X11) suffit : pas besoin de xdotool.
-# `console --window` : même session herdr dans une fenêtre normale (dock, bordure, agrandie), lanceur console.desktop.
-import os, subprocess, sys, time, gi
-gi.require_version('Gdk', '3.0'); gi.require_version('GdkX11', '3.0'); gi.require_version('Wnck', '3.0')
-from gi.repository import Gdk, GdkX11, Wnck
+# Le placement (écran de la souris, plein écran, tous les bureaux, au-dessus) est fait par
+# l'extension GNOME console@dotfiles.ch : en Wayland, un client ne peut ni déplacer ni activer
+# la fenêtre d'un autre client. Le même chemin sert en X11, donc plus de Wnck ni de Xlib.
+# Lancée par un raccourci GNOME (mode console) ou par console.desktop (mode fenêtre).
+# `console --window` : même session herdr dans une fenêtre normale (dock, bordure, agrandie).
+import os, shutil, subprocess, sys
+import gi
+from gi.repository import Gio, GLib
 
 WINDOW = '--window' in sys.argv
 # app id GTK : doit avoir la forme d'un nom de domaine inversé
 CLASS = 'ch.dotfiles.window' if WINDOW else 'ch.dotfiles.console'
-screen = Wnck.Screen.get_default()
 
-def find():
-    screen.force_update()
-    return next((w for w in screen.get_windows() if w.get_class_group_name() == CLASS), None)
+# Une session Wayland ne lit pas ~/.profile : rien lancé depuis un raccourci GNOME ou le dock
+# n'hérite de ~/.local/bin, où vit herdr. Ghostty échouerait à l'exécuter et la fenêtre serait vide.
+# On répare le PATH ici, et herdr comme les shells de ses panes en héritent.
+env = dict(os.environ)
+local_bin = os.path.expanduser('~/.local/bin')
+if local_bin not in env.get('PATH', '').split(os.pathsep):
+    env['PATH'] = local_bin + os.pathsep + env.get('PATH', '')
+HERDR = shutil.which('herdr', path=env['PATH']) or 'herdr'
 
-def pointer_monitor():
-    display = Gdk.Display.get_default()
-    _, x, y = display.get_default_seat().get_pointer().get_position()
-    return display.get_monitor_at_point(x, y).get_geometry()
-
-def middle_paste(win):  # clic molette = coller : (re)lancé à chaque affichage, l'ouverture peut dépasser l'attente
-    xid = str(win.get_xid())
-    if subprocess.run(['pgrep', '-f', f'middle-paste {xid}$'], stdout=subprocess.DEVNULL).returncode:
-        subprocess.Popen([os.path.join(os.path.dirname(os.path.realpath(__file__)), 'middle-paste'), xid],
-                         start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-def show(win):
-    middle_paste(win)
-    ws = screen.get_active_workspace()
-    if ws and not win.is_on_workspace(ws):
-        win.move_to_workspace(ws)
-    m = pointer_monitor()  # comme Guake : s'ouvre sur l'écran de la souris
-    x, y, w, h = win.get_geometry()
-    if not (m.x <= x + w // 2 < m.x + m.width and m.y <= y + h // 2 < m.y + m.height):
-        if win.is_fullscreen():
-            win.set_fullscreen(False)  # le plein écran reste collé à son écran : on le quitte pour déplacer
-            time.sleep(0.1)
-        geo = Wnck.WindowMoveResizeMask
-        win.set_geometry(Wnck.WindowGravity.STATIC, geo.X | geo.Y | geo.WIDTH | geo.HEIGHT,
-                         m.x, m.y, m.width, m.height)
-        time.sleep(0.1)
-    win.set_skip_tasklist(True)  # comme Guake : ni dans la barre des tâches, ni dans Alt+Tab
-    win.set_skip_pager(True)
-    if not win.is_fullscreen():
-        win.set_fullscreen(True)  # Ghostty ignore `fullscreen = true` sous GNOME/X11
-    win.activate(GdkX11.x11_get_server_time(Gdk.get_default_root_window()))
-
-win = find()
-if WINDOW:  # fenêtre normale : le dock gère ensuite affichage et réduction
-    if win is None:
-        subprocess.Popen(['ghostty', f'--class={CLASS}', '--gtk-single-instance=false', '--window-decoration=server', '--gtk-titlebar=false', '-e', 'herdr'],
-                         start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(50):  # agrandie, pas plein écran : barre du haut et dock visibles. Trop tôt, la demande est ignorée
-            time.sleep(0.1)
-            if (win := find()) and not win.is_maximized():
-                win.maximize()
-            elif win:
-                break
-    if win:
-        middle_paste(win)
-        win.activate(GdkX11.x11_get_server_time(Gdk.get_default_root_window()))
-elif win is None:
-    subprocess.Popen(['ghostty', f'--class={CLASS}', '--gtk-single-instance=false', '-e', 'herdr'],
-                     start_new_session=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(50):  # attend la fenêtre puis son plein écran (5 s max) : trop tôt, la demande est ignorée
-        time.sleep(0.1)
-        if (win := find()) and not win.is_fullscreen():
-            show(win)
-        elif win:
-            break
-elif win.is_active():
-    # GNOME interdit de réduire une fenêtre hors barre des tâches : on lève l'option le temps de réduire
-    win.set_skip_tasklist(False)
-    time.sleep(0.05)
-    win.minimize()
-    time.sleep(0.1)
-    win.set_skip_tasklist(True)
+cmd = ['ghostty', f'--class={CLASS}', '--gtk-single-instance=false']
+if WINDOW:  # agrandie, pas plein écran : barre du haut et dock visibles
+    cmd += ['--maximize=true', '--window-decoration=server', '--gtk-titlebar=false']
 else:
-    show(win)
+    cmd += ['--fullscreen=true']  # l'extension s'en charge aussi : évite une fenêtre qui saute
+cmd += ['-e', HERDR]
+
+try:
+    found = Gio.bus_get_sync(Gio.BusType.SESSION, None).call_sync(
+        'ch.dotfiles.Console', '/ch/dotfiles/Console', 'ch.dotfiles.Console', 'Toggle',
+        GLib.Variant('(sb)', (CLASS, not WINDOW)), GLib.VariantType('(b)'),
+        Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
+except GLib.Error as e:
+    # Lancée par un raccourci GNOME, la sortie d'erreur n'est lue par personne : on la rend visible.
+    msg = (f"Extension GNOME console@dotfiles.ch injoignable : {e.message}. "
+           "Vérifie « gnome-extensions info console@dotfiles.ch », puis déconnecte-toi/reconnecte-toi "
+           "(en Wayland le Shell ne charge une nouvelle extension qu'au démarrage de la session).")
+    subprocess.run(['notify-send', '-u', 'critical', 'Console herdr', msg], check=False)
+    sys.exit(msg)
+
+if not found:  # l'extension placera la fenêtre dès qu'elle apparaît
+    subprocess.Popen(cmd, env=env, start_new_session=True,
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

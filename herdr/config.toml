@@ -10,6 +10,7 @@ accent = "#cba6f7"
 sidebar_bg = "#181825"
 surface0 = "#1e1e2e"  # tabs inactifs sans pavé (comme herdr.dev)
 panel_bg = "#1e1e2e"  # barre des tabs
+active_row_bg = "#45385e"  # agent sélectionné et space actif : violet sombre, assorti à l'accent mauve
 
 [terminal]
 new_cwd = "follow"  # nouveau tab/pane dans le dossier courant

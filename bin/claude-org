@@ -6,33 +6,66 @@
 #   claude-org add        ajoute une organisation
 #   claude-org ls         liste les organisations
 #   claude-org rm <nom>   en retire une
+#   claude-org plan <nom> [offre]   offre affichée dans le menu du compte (le jeton ne permet pas de la lire)
 #   claude-org pick ARGS  (pour zsh/claude.zsh) demande l'organisation, écrit son jeton (rien = défaut)
 set -euo pipefail
 shopt -s nullglob
 O=~/.config/claude-orgs
 D=~/.cache/herdr-agents
 default=$(jq -r '.oauthAccount.organizationName // "connexion habituelle"' ~/.claude.json 2>/dev/null || echo "connexion habituelle")
+[[ $default == *"'s Organization" ]] && default="Compte personnel"  # nom donné par Claude à un compte personnel
 orgs=("$O"/*.token)
+PLANS=("Gratuit" "Pro" "Max 5x" "Max 20x" "Team" "Team non-profit" "Enterprise" "Education")
+
+# Offre d'une organisation, choisie dans la liste (ou tapée), retenue dans <nom>.plan
+ask_plan() {
+  local i=1 p c
+  echo "Offre de $1 (le jeton ne permet pas de la lire) :"
+  for p in "${PLANS[@]}"; do echo "  $i  $p"; i=$((i + 1)); done
+  read -rp "Choix (numéro ou texte, rien = inconnue) : " c
+  [[ $c =~ ^[0-9]+$ ]] && (( c >= 1 && c <= ${#PLANS[@]} )) && c=${PLANS[c - 1]}
+  if [[ $c ]]; then printf '%s\n' "$c" >"$O/$1.plan"; else rm -f "$O/$1.plan"; fi
+}
+
+# Dernier jeton d'une sortie de terminal : sans les séquences d'échappement ni les bords de cadre, les lignes
+# qui ne contiennent que des caractères de jeton à la suite de sk-ant-oat… en sont la suite.
+token() {
+  sed -E 's/\x1b\[[0-9;?]*[ -\/]*[@-~]//g; s/\x1b\][^\x07]*\x07//g; s/\x1b[()][A-Za-z0-9]//g; s/\r//g; s/[│┃║]//g' | awk '
+    match($0, /sk-ant-oat[A-Za-z0-9_-]+/) { tok = substr($0, RSTART, RLENGTH); last = tok; open = 1; next }
+    open { line = $0; gsub(/^[ \t]+|[ \t]+$/, "", line)
+           if (line ~ /^[A-Za-z0-9_-]+$/) { tok = tok line; last = tok } else open = 0 }
+    END { print last }'
+}
 
 case ${1:-} in
 add)
   mkdir -p -m 700 "$O"
-  echo "Dans le navigateur, choisis l'organisation à ajouter, puis copie le jeton affiché (sk-ant-oat…)."
-  command claude setup-token
-  read -rsp "Jeton : " tok; echo
-  [[ $tok ]] || exit 1
+  echo "Dans le navigateur, choisis l'organisation à ajouter et connecte-toi : le jeton revient ici tout seul."
+  # Le jeton (sk-ant-oat…) s'affiche dans ce terminal, pas dans le navigateur, coupé sur plusieurs lignes :
+  # on enregistre la sortie (script garde un vrai terminal) et on le recolle. Le relevé est effacé aussitôt.
+  log=$(mktemp -p "$O")
+  trap 'rm -f "$log"' EXIT
+  script -qfec "command claude setup-token" "$log" || true
+  tok=$(token <"$log"); rm -f "$log"
+  if [[ $tok ]]; then echo "Jeton récupéré."
+  else read -rsp "Jeton non trouvé dans la sortie, colle-le (sk-ant-oat…) : " tok; echo; tok=${tok//[[:space:]]/}; fi
+  [[ $tok == sk-ant-oat* ]] || { echo "Jeton invalide" >&2; exit 1; }
   # nom proposé : celui que l'API donne pour ce jeton, s'il a le droit de lire le profil
   name=$(curl -sf -m 10 https://api.anthropic.com/api/oauth/profile -H "anthropic-beta: oauth-2025-04-20" \
     -H @<(printf 'Authorization: Bearer %s\n' "$tok") | jq -r '.organization.name // empty' || true)
   read -rp "Nom de l'organisation${name:+ [$name]} : " n; name=${n:-$name}
   [[ $name && $name != */* ]] || { echo "Nom invalide" >&2; exit 1; }
   (umask 077; printf '%s\n' "$tok" >"$O/$name.token")
+  ask_plan "$name"
   echo "Ajoutée : $name. Au prochain « claude », tu choisiras entre $default et $name.";;
 ls)
   echo "$default (défaut)"
-  for f in "${orgs[@]}"; do f=${f##*/}; echo "${f%.token}"; done;;
+  for f in "${orgs[@]}"; do n=$(basename "$f" .token); echo "$n${O:+$( [[ -f $O/$n.plan ]] && echo " ($(<"$O/$n.plan"))")}"; done;;
 rm)
-  rm -v "$O/${2:?nom}.token";;
+  rm -v "$O/${2:?nom}.token"; rm -f "$O/$2.plan";;
+plan)
+  [[ -f $O/${2:?nom}.token ]] || { echo "Organisation inconnue : $2" >&2; exit 1; }
+  if [[ ${3:-} ]]; then printf '%s\n' "$3" >"$O/$2.plan"; else ask_plan "$2"; fi;;
 pick)
   shift
   (( ${#orgs[@]} )) || exit 0  # une seule organisation : transparent
@@ -63,5 +96,5 @@ pick)
     cat "${orgs[c - 2]}"
   fi;;
 *)
-  sed -n '6,9s/^# \?//p' "$0"; exit 1;;
+  sed -n '6,10s/^# \?//p' "$0"; exit 1;;
 esac

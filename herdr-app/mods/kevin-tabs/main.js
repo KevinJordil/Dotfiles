@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, ScrollHandle } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, exec, appHome, props, closeOverlay } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, exec, appHome, props, closeOverlay, nextCommand, setShared, focused } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -16,9 +16,13 @@ function find(node, id) {
 // Every tab has the same width: a status, a rename or a zoom never changes it.
 // On the right, in place of the Files panel button: the Claude account in use and its limits (<repo>/bin/claude-usage).
 const TAB_W = 160;
+const MENU_W = 300;
 const CLAUDE = "#d97757";
 // Catppuccin Mocha, like the agents: green, yellow, orange, red as a limit fills.
 const color = p => p >= 90 ? "#f38ba8" : p >= 70 ? "#fab387" : p >= 50 ? "#f9e2af" : "#a6e3a1";
+// The organization Claude makes for a personal account is "<email>'s Organization": too long, and says nothing.
+const short = org => !org || /'s Organization$/.test(org) ? null : org;
+const orgName = u => short(u.org);
 // A cached answer can predate the reset: the limit has started over since.
 const pct = l => Date.parse(l.resets_at) < Date.now() ? 0 : Math.round(Math.min(l.utilization, 100));
 const limits = u => [["5h", "Session (5 h)", u.session], ["7j", "Semaine", u.weekly]].filter(([, , l]) => l);
@@ -29,22 +33,27 @@ const left = iso => {
 
 export default class Tabs extends View {
   init(_props, cx) {
-    this.usage = null;
-    this.refreshUsage(cx);
-    cx.timer.every(60000, (cx) => this.refreshUsage(cx));
+    // The account menu (a popup copy of this mod) gets what the widget shows.
+    this.usage = props()?.usage ?? null;
+    this.repo = props()?.repo;
+    if (!props()?.account) cx.timer.every(60000, (cx) => this.refreshUsage(cx));
     this.pressed = null;
     this.hoverTab = null;
     this.scroll = ScrollHandle.new();
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
+    // kevin-tabs.account (a key, herdr-app do): the account menu, as a click on the widget opens it.
+    if (!props()?.account) cx.spawn(async (cx) => { for (;;) { if (await nextCommand() === "account" && this.usage) this.openAccount(); cx.notify(); } });
   }
 
   refreshUsage(cx) {
+    const term = this.usageTerm;
     cx.spawn(async (cx) => {
       try {
         // The repo may be cloned as dotfiles, Dotfiles…: follow this mod's link once.
         this.repo ??= (await exec("readlink", ["-f", `${appHome()}/mods/kevin-tabs`])).stdout.trim().replace(/\/herdr-app\/mods\/kevin-tabs$/, "");
-        const r = await exec(`${this.repo}/bin/claude-usage`, []);
-        if (r.code === 0) this.usage = JSON.parse(r.stdout);
+        // The organization of the claude in the focused terminal (claude-org chooses it at launch).
+        const r = await exec(`${this.repo}/bin/claude-usage`, this.usageTerm ? [this.usageTerm] : []);
+        if (r.code === 0 && term === this.usageTerm) this.usage = JSON.parse(r.stdout);  // not an older switch's answer
       } catch {}
       cx.notify();
     });
@@ -58,17 +67,25 @@ export default class Tabs extends View {
       .child(div().text_color(t.dim).child(short))
       .child(div().text_color(color(pct(l))).child(`${pct(l)}%`));
     return h_flex().id("claude-usage").h(26).px(6).gap(7).flex_none().items_center().rounded(6).text_size(11.5).text_color(t.muted)
-      .hover(s => s.bg(t.hover)).on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-      .on_click(() => openOverlay({ mod: "kevin-tabs", kind: "popup", width: 300, height: this.menuHeight(u), props: { account: true } }))
+      .hover(s => s.bg(t.hover)).on_mouse_down("left", (e, cx) => { cx.stop_propagation(); if (e.bounds) this.usageBounds = e.bounds; })
+      .on_click(() => this.openAccount())
       .child(h_flex().gap(5).items_center().child(svg("mods/kevin-tabs/sparkle.svg").size(12).text_color(CLAUDE))
-        .child(div().child(u.org ?? u.email)))
+        .child(div().max_w(180).truncate().child(orgName(u) ?? "Personnel")))
       .children(limits(u).map(meter));
   }
 
-  // A popup's size is fixed when it opens: the menu's measured height (its content reports it), else an estimate.
+  // Under the widget, right edges aligned (it sits at the window's right edge: at the pointer, the menu ran past it).
+  openAccount() {
+    const b = this.usageBounds, z = settings().zoom ?? 1;
+    openOverlay({ mod: "kevin-tabs", kind: "popup", width: MENU_W, height: this.menuHeight(this.usage), props: { account: true, usage: this.usage, repo: this.repo },
+      ...(b && { at: { x: Math.max(8, b.x + b.width - MENU_W * z), y: b.y + b.height + 4 } }) });
+  }
+
+  // A popup's size is fixed when it opens: the menu's measured height, else an estimate. The menu reports it
+  // through shared() (each popup copy has its own localStorage), in window px; the popup's height is zoomed.
   menuHeight(u) {
-    const measured = Number(localStorage.getItem(`menuHeight-${limits(u).length}-${u.others?.length ?? 0}`));
-    return measured ? measured + 2 : 204 + 46 * limits(u).length + 30 * (u.others?.length ?? 0);
+    const measured = shared(`kevin-tabs.menuHeight-${limits(u).length}-${u.others?.length ?? 0}`);
+    return measured ? Math.ceil(measured / (settings().zoom ?? 1)) + 2 : 224 + 46 * limits(u).length + 30 * (u.others?.length ?? 0);
   }
 
   // The account menu: who, the organizations (the default one, whose limits follow, then those claude asks
@@ -80,22 +97,24 @@ export default class Tabs extends View {
       closeOverlay(props().overlay);
       run("terminal.open", { argv: ["zsh", "-ic", `${this.repo}/bin/claude-org add; exec zsh -i`], place: "tab", name: "Organisation Claude" });
     };
-    const section = label => div().px(4).pt(2).text_size(11).text_color(t.dim).child(label);
-    const key = `menuHeight-${limits(u).length}-${u.others?.length ?? 0}`;
-    return v_flex().size_full().bg(t.popover).child(v_flex().w_full().p(10).pb(14).gap(6).text_size(13)
-      .on_size_change(size => { if (Math.round(size.height) !== Number(localStorage.getItem(key))) localStorage.setItem(key, String(Math.round(size.height))); })
+    const orgRow = (name, on, plan, tags) => tags(h_flex().gap(8).px(8).py(5).rounded(6).items_center().when(on, el => el.bg(t.selected))
+      .child(div().flex_1().min_w(0).truncate().text_color(on ? t.foreground : t.muted).child(name))
+      .when(Boolean(plan), el => el.child(div().flex_none().px(6).rounded(4).text_size(11).text_color(CLAUDE).bg(CLAUDE + "26").child(plan))));
+    const section = label => div().px(4).pt(2).truncate().text_size(11).text_color(t.dim).child(label);
+    const key = `kevin-tabs.menuHeight-${limits(u).length}-${u.others?.length ?? 0}`;
+    return v_flex().size_full().bg(t.popover).child(v_flex().w_full().flex_none().p(10).pb(14).gap(6).text_size(13)
+      .on_size_change(size => { if (Math.round(size.height) !== shared(key)) setShared(key, Math.round(size.height)); })
       .child(h_flex().gap(10).px(4).items_center()
         .child(svg("mods/kevin-tabs/sparkle.svg").size(18).text_color(CLAUDE))
         .child(v_flex().min_w(0)
           .child(div().truncate().text_color(t.foreground).child(u.name ?? u.email))
           .child(div().truncate().text_size(11.5).text_color(t.dim).child(u.email))))
-      .child(section("Organisation"))
-      .child(h_flex().gap(8).px(8).py(5).rounded(6).items_center().bg(t.selected)
-        .child(div().flex_1().min_w(0).truncate().text_color(t.foreground).child(u.org ?? "Compte personnel"))
-        .when(Boolean(u.plan), el => el.child(div().px(6).rounded(4).text_size(11).text_color(CLAUDE).bg(CLAUDE + "26").child(u.plan[0].toUpperCase() + u.plan.slice(1))))
-        .child(div().text_size(11).text_color(t.dim).child("défaut")))
-      .children((u.others ?? []).map(name => div().px(8).py(3).truncate().text_color(t.muted).child(name)))
-      .child(section(`Limites · ${u.org ?? "compte personnel"}`))
+      .child(section("Organisation de ce terminal"))
+      // The focused terminal's organization is highlighted, each with its plan (Pro, Max 5x, Team…): the default
+      // one's from its profile, the others' as chosen when added (claude-org plan).
+      .child(orgRow(short(u.default) ?? "Compte personnel", !u.custom, u.plan, el => el.child(div().text_size(11).text_color(t.dim).child("défaut"))))
+      .children((u.others ?? []).map(name => orgRow(name, u.custom && u.org === name, u.plans?.[name], el => el)))
+      .child(section(`Limites · ${orgName(u) ?? "compte personnel"}`))
       .children(limits(u).map(([, long, l]) => v_flex().gap(3).px(4)
         .child(h_flex().items_center().text_size(12)
           .child(div().flex_1().text_color(t.muted).child(long))
@@ -135,9 +154,12 @@ export default class Tabs extends View {
     localStorage.setItem("panels", JSON.stringify(this.panels));
   }
 
-  render() {
+  render(cx) {
     const t = theme();
     if (props()?.account) return this.accountMenu(t);
+    // The widget follows the focused terminal (a mod block focused keeps the last one).
+    const term = focused()?.terminal;
+    if (this.usage === null && !this.loading || term && term !== this.usageTerm) { this.loading = true; this.usageTerm = term ?? this.usageTerm; this.refreshUsage(cx); }
     const space = spaces().find(p => p.active);
     const shown = space?.tabs ?? [];
     const active = shown.findIndex(tab => tab.active);

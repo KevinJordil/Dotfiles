@@ -2,17 +2,64 @@
 # Pour la barre d'onglets de l'app Herdr (mod kevin-tabs) : compte et organisation Claude en cours, et où en sont
 # ses limites (session de 5 h, semaine), comme /usage dans Claude Code. Jeton OAuth de Claude Code, envoyé
 # à l'API Anthropic seulement, par un descripteur plutôt qu'en argument (visible dans ps).
+#   claude-usage [terminal]   terminal : l'organisation est celle du claude qui y tourne (bin/claude-org)
 # L'API refuse les appels trop rapprochés (429) : un appel toutes les 5 min au plus, sinon la dernière réponse.
 # Une réponse par organisation : après un changement (claude auth login), pas d'anciennes valeurs.
-C=~/.cache/herdr-agents/usage-$(jq -r .oauthAccount.organizationUuid ~/.claude.json).json
-if [[ ! -e $C || $(find "$C" -mmin +5) ]]; then
-  u=$(curl -sf -m 10 https://api.anthropic.com/api/oauth/usage -H "anthropic-beta: oauth-2025-04-20" \
-    -H @<(printf 'Authorization: Bearer %s\n' "$(jq -r .claudeAiOauth.accessToken ~/.claude/.credentials.json)")) &&
-    echo "$u" >"$C" || touch "$C"
+D=~/.cache/herdr-agents; mkdir -p "$D"
+O=~/.config/claude-orgs
+auth() { printf 'Authorization: Bearer %s\n' "$1"; }
+stale() { [[ ! -e $1 || $(find "$1" -mmin +5) ]]; }
+
+# Le claude de ce terminal a-t-il reçu le jeton d'une autre organisation (CLAUDE_CODE_OAUTH_TOKEN) ?
+org= tok=
+if [[ ${1:-} ]]; then
+  for pid in $(pgrep -x claude); do
+    e=$(tr '\0' '\n' </proc/"$pid"/environ 2>/dev/null) || continue
+    grep -qx "HC_TERMINAL_ID=$1" <<<"$e" || continue
+    tok=$(sed -n 's/^CLAUDE_CODE_OAUTH_TOKEN=//p' <<<"$e"); break
+  done
+  if [[ $tok ]]; then
+    org="autre organisation"
+    for f in "$O"/*.token; do [[ -f $f && $(tr -d '\n' <"$f") == "$tok" ]] && { org=$(basename "$f" .token); break; }; done
+  fi
+fi
+
+if [[ $tok ]]; then
+  # Un jeton de claude setup-token n'a pas le droit de lire /api/oauth/usage : les mêmes limites sont dans
+  # les en-têtes d'une réponse (requête d'un jeton, à Haiku).
+  C=$D/usage-org-${org//\//_}.json
+  if stale "$C"; then
+    h=$(curl -s -m 15 -D - -o /dev/null https://api.anthropic.com/v1/messages -H "anthropic-version: 2023-06-01" \
+      -H "anthropic-beta: oauth-2025-04-20" -H "content-type: application/json" -H @<(auth "$tok") \
+      -d '{"model":"claude-haiku-5-5","max_tokens":1,"system":"You are Claude Code, Anthropic'\''s official CLI for Claude.","messages":[{"role":"user","content":"."}]}')
+    get() { sed -n "s/^anthropic-ratelimit-unified-$1: *//Ip" <<<"$h" | tr -d '\r'; }
+    lim() { [[ $(get "$1-utilization") ]] && jq -n --arg u "$(get "$1-utilization")" --arg r "$(get "$1-reset")" \
+      '{utilization: ($u | tonumber * 100), resets_at: ($r | tonumber | todate)}' || echo null; }
+    if [[ $(get 5h-utilization) ]]; then
+      jq -n --argjson s "$(lim 5h)" --argjson w "$(lim 7d)" '{five_hour: $s, seven_day: $w}' >"$C"
+    else touch "$C"; fi
+  fi
+else
+  C=$D/usage-$(jq -r .oauthAccount.organizationUuid ~/.claude.json).json
+  if stale "$C"; then
+    u=$(curl -sf -m 10 https://api.anthropic.com/api/oauth/usage -H "anthropic-beta: oauth-2025-04-20" \
+      -H @<(auth "$(jq -r .claudeAiOauth.accessToken ~/.claude/.credentials.json)")) &&
+      echo "$u" >"$C" || touch "$C"
+  fi
 fi
 u=$(cat "$C" 2>/dev/null); [[ $u ]] || u=null
 # autres organisations, choisies au lancement de claude (bin/claude-org)
-others=$(ls ~/.config/claude-orgs 2>/dev/null | sed -n 's/\.token$//p' | jq -R . | jq -s .)
-jq -n --argjson u "$u" --argjson others "$others" --slurpfile c ~/.claude.json --slurpfile k ~/.claude/.credentials.json '{
-  name: $c[0].oauthAccount.fullName, email: $c[0].oauthAccount.emailAddress, org: $c[0].oauthAccount.organizationName,
-  plan: $k[0].claudeAiOauth.subscriptionType, session: $u.five_hour, weekly: $u.seven_day, others: $others}'
+others=$(ls "$O" 2>/dev/null | sed -n 's/\.token$//p' | jq -R . | jq -s .)
+# offres : celle de la connexion habituelle d'après son profil (organizationType, plus à jour que le
+# subscriptionType retenu à la connexion), celles des autres choisies à leur ajout (claude-org plan)
+plans=$(for f in "$O"/*.plan; do [[ -f $f ]] && jq -n --arg k "$(basename "$f" .plan)" --arg v "$(head -1 "$f")" '{($k): $v}'; done | jq -s 'add // {}')
+# org : celle du terminal ; default : celle de la connexion habituelle
+jq -n --argjson u "$u" --argjson others "$others" --argjson plans "$plans" --arg org "$org" --slurpfile c ~/.claude.json --slurpfile k ~/.claude/.credentials.json '
+  $c[0].oauthAccount as $a | ($a.organizationType // ("claude_" + ($k[0].claudeAiOauth.subscriptionType // ""))) as $t
+  | ($a.organizationRateLimitTier // $k[0].claudeAiOauth.rateLimitTier // "") as $tier | {
+  name: $a.fullName, email: $a.emailAddress, default: $a.organizationName,
+  org: (if $org == "" then $a.organizationName else $org end), custom: ($org != ""),
+  plan: ({claude_free: "Gratuit", free: "Gratuit", claude_pro: "Pro", claude_team: "Team", claude_enterprise: "Enterprise"}[$t]
+    // if $t == "claude_max" then (if $tier | test("20x") then "Max 20x" elif $tier | test("5x") then "Max 5x" else "Max" end)
+       elif $t == "claude_" then null else ($t | sub("^claude_"; "") | sub("_"; " "; "g") | (.[:1] | ascii_upcase) + .[1:]) end),
+  plans: $plans, session: $u.five_hour, weekly: $u.seven_day, others: $others}'

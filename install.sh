@@ -10,7 +10,7 @@ missing=()
 for p in zsh guake jq curl git; do command -v $p >/dev/null || missing+=($p); done
 command -v dconf >/dev/null || missing+=(dconf-cli)  # réglages Guake
 python3 -c "import gi; gi.require_version('Wnck', '3.0')" 2>/dev/null || missing+=(gir1.2-wnck-3.0)  # bin/console : repli X11 sans l'extension
-fc-list : family | grep -q "Ubuntu Sans Mono" || missing+=(fonts-ubuntu)  # police des terminaux de l'app Herdr
+[[ $(fc-list "Ubuntu Sans Mono") ]] || missing+=(fonts-ubuntu)  # police des terminaux de l'app Herdr (pas de grep -q : avec pipefail, SIGPIPE fait échouer le test)
 command -v notify-send >/dev/null || missing+=(libnotify-bin)  # bin/console : erreurs visibles depuis un raccourci
 python3 -c 'import gi; from gi.repository import Gio' 2>/dev/null || missing+=(python3-gi)  # bin/console (D-Bus)
 # Pas dans les dépôts Ubuntu : PPA communautaire de Mike Kasberg (cité par ghostty.org). Il ne publie

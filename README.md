@@ -26,6 +26,8 @@ Fonctionne en **Wayland comme en X11** : c'est l'extension GNOME `gnome-shell/co
 | `bin/agent-session` | hooks Claude Code `SessionStart` / `SessionEnd` : dans l'app Herdr, retient la session Claude de chaque terminal (`/exit` l'oublie) | `~/.claude/settings.json` (par `install.sh`) |
 | `bin/herdr-app-restore` | après un redémarrage, reprend dans chaque terminal de l'app la session Claude retenue | autostart GNOME (par `install.sh`) |
 | `bin/herdr-app-agents` | titre, dernière demande, sous-agents et shells de chaque Claude de l'app, pour le mod `claude-agents` | appelé par le mod |
+| `bin/claude-usage` | compte et organisation Claude, limites session (5 h) et semaine, en haut à droite de l'app (mod `kevin-tabs`, à la place de Files) ; un clic ouvre le menu du compte | appelé par le mod, API interrogée toutes les 5 min au plus |
+| `bin/claude-org` | organisation Claude choisie au lancement de `claude` quand il y en a plusieurs (`claude-org add` : jeton longue durée de `claude setup-token` dans `~/.config/claude-orgs`), aucune question sinon ; une reprise dans l'app garde l'organisation du terminal | fonction `claude` de `zsh/claude.zsh`, bouton « Ajouter une organisation… » du menu |
 | `herdr-app/layouts/kevin.json` | mise en page de l'app Herdr : sans en-tête ni pied, agents et barre d'état personnalisés | `~/.config/herdr-app/layouts` (lien, activée par `install.sh`) |
 | `herdr-app/settings.json` | réglages de l'app : zoom 1,2, sons | fusionné dans `~/.config/herdr-app/settings.json` |
 | `herdr-app/mods/kevin-spaces` | spaces sur deux lignes : nom, puis tabs, agents (en cours, finis, bloqués) et accès direct aux panneaux (ex. Atelier) | `~/.config/herdr-app/mods` (lien) |
@@ -36,6 +38,7 @@ Fonctionne en **Wayland comme en X11** : c'est l'extension GNOME `gnome-shell/co
 | `ghostty/config` | police Roboto Mono, Catppuccin Mocha, fond `#11111b`, sans décoration, shift+clic molette = coller la sélection | `~/.config/ghostty/config` (lien) |
 | `guake/guake.dconf` | réglages Guake (transition) : un seul onglet, plein écran, mêmes couleurs, touche `*` | chargé avec `dconf load` |
 | `zsh/herdr.zsh` | lance herdr dans Guake (Ghostty le lance directement), historique par onglet principal, nom auto des sous-onglets (`dossier·programme`), fonction `nom` | sourcé en tête de `zsh/zshrc` |
+| `zsh/claude.zsh` | fonction `claude` : demande l'organisation (`bin/claude-org pick`) puis lance Claude avec son jeton | sourcé par `zsh/zshrc` |
 | `zsh/zshrc` | zsh générique : Oh My Zsh, Starship, plugins git/zsh-autosuggestions/docker ; source `~/.zshrc.local` | `~/.zshrc` (lien) |
 | `zsh/starship.toml` | prompt Starship (mise en page p10k lean, Catppuccin, git détaillé, Docker ; partie droite sur la ligne de saisie : pas de prompt répété au resize d'un split) | via `STARSHIP_CONFIG` |
 | `fonts/` | Roboto Mono (police de Guake), MesloLGS NF (icônes du prompt) | `~/.local/share/fonts` (copie) |

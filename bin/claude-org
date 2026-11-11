@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Organisation Claude choisie au lancement de chaque session. L'organisation de la connexion habituelle
+# (~/.claude/.credentials.json) est celle par défaut ; chaque autre a son jeton longue durée (claude setup-token,
+# organisation choisie dans le navigateur) dans ~/.config/claude-orgs/<nom>.token, passé à la session seule
+# par CLAUDE_CODE_OAUTH_TOKEN (fonction claude de zsh/claude.zsh). Sans autre organisation : aucune question.
+#   claude-org add        ajoute une organisation
+#   claude-org ls         liste les organisations
+#   claude-org rm <nom>   en retire une
+#   claude-org pick ARGS  (pour zsh/claude.zsh) demande l'organisation, écrit son jeton (rien = défaut)
+set -euo pipefail
+shopt -s nullglob
+O=~/.config/claude-orgs
+D=~/.cache/herdr-agents
+default=$(jq -r '.oauthAccount.organizationName // "connexion habituelle"' ~/.claude.json 2>/dev/null || echo "connexion habituelle")
+orgs=("$O"/*.token)
+
+case ${1:-} in
+add)
+  mkdir -p -m 700 "$O"
+  echo "Dans le navigateur, choisis l'organisation à ajouter, puis copie le jeton affiché (sk-ant-oat…)."
+  command claude setup-token
+  read -rsp "Jeton : " tok; echo
+  [[ $tok ]] || exit 1
+  # nom proposé : celui que l'API donne pour ce jeton, s'il a le droit de lire le profil
+  name=$(curl -sf -m 10 https://api.anthropic.com/api/oauth/profile -H "anthropic-beta: oauth-2025-04-20" \
+    -H @<(printf 'Authorization: Bearer %s\n' "$tok") | jq -r '.organization.name // empty' || true)
+  read -rp "Nom de l'organisation${name:+ [$name]} : " n; name=${n:-$name}
+  [[ $name && $name != */* ]] || { echo "Nom invalide" >&2; exit 1; }
+  (umask 077; printf '%s\n' "$tok" >"$O/$name.token")
+  echo "Ajoutée : $name. Au prochain « claude », tu choisiras entre $default et $name.";;
+ls)
+  echo "$default (défaut)"
+  for f in "${orgs[@]}"; do f=${f##*/}; echo "${f%.token}"; done;;
+rm)
+  rm -v "$O/${2:?nom}.token";;
+pick)
+  shift
+  (( ${#orgs[@]} )) || exit 0  # une seule organisation : transparent
+  # sous-commandes (auth, mcp…) et mode -p : organisation par défaut, sans question
+  case ${1:-} in auth|mcp|plugin|setup-token|doctor|update|upgrade|install|config|migrate-installer) exit 0;; esac
+  for a in "$@"; do [[ $a == -p || $a == --print ]] && exit 0; done
+  # app Herdr : la reprise d'une session (herdr-app-restore, claude --resume) garde l'organisation de son terminal
+  mem=${HC_TERMINAL_ID:+$D/hc-$HC_TERMINAL_ID.org}
+  for a in "$@"; do
+    if [[ $a == --resume || $a == -r || $a == --continue || $a == -c ]] && [[ $mem && -f $mem ]]; then
+      name=$(<"$mem"); [[ -f $O/$name.token ]] && cat "$O/$name.token"; exit 0
+    fi
+  done
+  [[ -t 0 ]] || exit 0
+  {
+    echo "Organisation Claude :"
+    echo "  1  $default (défaut)"
+    i=2; for f in "${orgs[@]}"; do f=${f##*/}; echo "  $i  ${f%.token}"; i=$((i + 1)); done
+  } >/dev/tty
+  read -rp "Choix [1] : " c </dev/tty 2>/dev/tty
+  c=${c:-1}
+  [[ $c =~ ^[0-9]+$ ]] && (( c >= 1 && c <= ${#orgs[@]} + 1 )) || { echo "Choix invalide" >/dev/tty; exit 1; }
+  if (( c == 1 )); then
+    [[ $mem ]] && rm -f "$mem"
+  else
+    f=${orgs[c - 2]##*/}
+    [[ $mem ]] && { mkdir -p "$D"; echo "${f%.token}" >"$mem"; }
+    cat "${orgs[c - 2]}"
+  fi;;
+*)
+  sed -n '6,9s/^# \?//p' "$0"; exit 1;;
+esac

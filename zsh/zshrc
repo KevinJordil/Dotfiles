@@ -6,6 +6,7 @@ export DOTFILES=${${(%):-%N}:A:h:h}
 
 # Guake → herdr : doit rester en tête (exec herdr avant tout le reste)
 source $DOTFILES/zsh/herdr.zsh
+source $DOTFILES/zsh/claude.zsh  # claude : organisation choisie au lancement
 
 export ZSH="$HOME/.oh-my-zsh"
 ZSH_THEME=""  # prompt : Starship (en fin de fichier)

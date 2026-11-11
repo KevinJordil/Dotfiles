@@ -35,18 +35,18 @@ export default class Firmware extends View {
     return v_flex().id(id).px(10).py(7).gap(1).rounded(8).border_1().border_color("#ffffff12").cursor_pointer()
       .hover((s) => s.bg(color + "1a").border_color(color + "66"))
       .on_click(() => this.launch(label, cmd))
-      .child(div().text_size(12.5).font_semibold().text_color(C.text).child(label))
-      .child(div().text_size(11).text_color(C.dim).truncate().child(cmd));
+      .child(div().text_size(13).font_semibold().text_color(C.text).child(label))
+      .child(div().text_size(11.5).text_color(C.dim).truncate().child(cmd));
   }
 
   section(title, color, items) {
-    return v_flex().gap(6).child(div().text_size(11).font_medium().text_color(color).child(title)).children(items);
+    return v_flex().gap(6).child(div().text_size(11.5).font_medium().text_color(color).child(title)).children(items);
   }
 
   render(cx) {
     const t = theme();
     const mb = this.mb;
-    const board = (b) => div().id(`mb-${b}`).px(10).h(24).rounded(12).flex().items_center().text_size(12).cursor_pointer()
+    const board = (b) => div().id(`mb-${b}`).px(10).h(24).rounded(12).flex().items_center().text_size(11.5).cursor_pointer()
       .when(b === mb, (el) => el.bg(C.accent + "33").text_color(C.accent).font_semibold())
       .when(b !== mb, (el) => el.text_color(C.dim).hover((s) => s.bg(C.hover).text_color(C.text)))
       .on_click((_e, cx) => { this.mb = b; localStorage.setItem("mb", b); cx.notify(); })
@@ -56,7 +56,7 @@ export default class Firmware extends View {
       : [div().text_size(11.5).text_color(C.dim).child("Aucun port série branché")];
     return v_flex().id("firmware").size_full().p(14).gap(16).bg(t.background).text_color(C.text).overflow_y_scrollbar()
       .child(v_flex().gap(8)
-        .child(div().text_size(15).font_semibold().child("Atelier firmware"))
+        .child(div().text_size(13).font_semibold().child("Atelier firmware"))
         .child(h_flex().gap(6).children(BOARDS.map(board))))
       .child(this.section("Flasher", C.flash, [
         this.button("flash-mb", `Carte ${mb}`, `./scripts/flash-mb.sh ${mb}`, C.flash),

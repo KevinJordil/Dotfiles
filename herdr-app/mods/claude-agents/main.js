@@ -5,12 +5,15 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, home } from "herdr";
+import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, home, hc } from "herdr";
 
 // Catppuccin Mocha, like the console (herdr TUI) and Ghostty.
-const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#7f849c", title: "#e6e9f5", desc: "#a6adc8", sub: "#cba6f7", shell: "#fab387",
+const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#9399b2", title: "#ffffff", idleTitle: "#cdd6f4", desc: "#9399b2", sub: "#cba6f7", shell: "#fab387",
   cardHover: "#ffffff0a", selected: "#2f2840", selectedBorder: "#cba6f7" };
 const LABEL = { working: "En cours", done: "Fini", blocked: "Bloqué" };
+// The spaces' avatar colors (kevin-spaces / spaces: shared "space.colors"), so an agent shows its space.
+const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
+const spaceColor = (id) => { const c = (shared("space.colors") ?? {})[id] ?? "ansi6"; return c.startsWith("#") ? c : MARK[c] ?? MARK.ansi6; };
 const plural = (n, w) => `${n} ${w}${n > 1 ? "s" : ""}`;
 
 function find(node, id) {
@@ -66,7 +69,8 @@ const SORTS = [
   { id: "priority", label: "Priority", icon: "clock" },
   { id: "grouped", label: "Grouped by space", icon: "layers" },
 ];
-const sortOf = () => SORTS.find((s) => s.id === shared("agents.sort")) ?? SORTS[0];
+// Kevin : one flat list in space order, no "Idle" / "Done" sections: each card shows its own state.
+const sortOf = () => SORTS[1];
 const SECTION = { 4: "Needs you", 3: "Done", 2: "Working", 1: "Idle" };
 const SECTION_STATUS = { 4: "blocked", 3: "done", 2: "working" };
 
@@ -95,8 +99,31 @@ export default class Agents extends View {
     this.migratingPins = new Set();
     cx.timer.every(30000, (cx) => cx.notify());
     this.info = {};
+    this.confirming = null; // the agent whose Stop button asks for a second click
+    this.stopping = new Set();
     this.refreshInfo(cx);
     cx.timer.every(2000, (cx) => this.refreshInfo(cx));
+  }
+
+  // Stops a Claude session cleanly: /exit (its SessionEnd hook forgets it for the restore after reboot),
+  // wait for the shell to come back, then close its pane. The conversation stays resumable (claude --resume).
+  stopAgent(a, cx) {
+    this.confirming = null;
+    this.stopping.add(a.address);
+    cx.notify();
+    cx.spawn(async (cx) => {
+      try {
+        await hc(["send", a.address, "/exit"]);
+        for (let i = 0; i < 40; i++) {
+          const r = await hc(["get", a.address, "--json"]);
+          if (["zsh", "bash", "sh", "fish"].includes(JSON.parse(r.stdout).foreground?.name)) break;
+          await exec("sleep", ["0.5"]);
+        }
+        run("pane.close", { pane: a.pane });
+      } catch {}
+      this.stopping.delete(a.address);
+      cx.notify();
+    });
   }
 
   // Title, last request, sub-agents and shells of each Claude, by terminal address.
@@ -113,18 +140,31 @@ export default class Agents extends View {
     });
   }
 
-  // The card's status avatar: a tinted round with a spinner, a check, a "!" or a quiet dot.
+  // Left of the card, the state alone (the space is the small square on the second line): each state has
+  // its own shape and color in a tinted square: an orange spinner (working),
+  // a green check (done), a red warning (blocked); idle is a quiet ring.
   bigStatus(a) {
     const c = C[a.status] ?? C.idle;
-    const glyph = a.status === "working" ? svg("mods/workspace-chrome/spinner.svg").size(11).text_color(c).spin(800)
-      : a.status === "done" ? svg("mods/workspace-chrome/check.svg").size(11).text_color(c)
-      : a.status === "blocked" ? div().text_size(11).font_bold().text_color(c).child("!")
-      : div().size(6).rounded(3).bg(c);
-    return div().size(18).flex_none().rounded(9).bg(c + (a.status === "idle" ? "1f" : "29")).flex().items_center().justify_center().child(glyph);
+    const icon = a.status === "working" ? svg("mods/workspace-chrome/spinner.svg").size(13).text_color(c).spin(800)
+      : a.status === "done" ? svg("mods/claude-agents/check.svg").size(13).text_color(c)
+      : a.status === "blocked" ? svg("mods/claude-agents/alert.svg").size(13).text_color(c)
+      : null;
+    // Idle stays quiet: a small hollow ring, no square.
+    if (!icon) return h_flex().size(22).flex_none().items_center().justify_center().child(div().size(8).rounded(4).border(1.5).border_color("#6c7086"));
+    return h_flex().size(22).flex_none().rounded(6).bg(c + "33").items_center().justify_center().child(icon);
   }
 
+
+  // The space as a small colored square with its initial, like a tag.
+  spaceTag(a) {
+    return div().size(15).flex_none().rounded(4).bg(spaceColor(a.space)).flex().items_center().justify_center()
+      .text_size(11.5).font_bold().text_color("#ffffff").child([...(a.space_name ?? "?")][0]?.toUpperCase() ?? "?");
+  }
+
+
+
   chip(text, color, icon) {
-    return h_flex().flex_none().h(16).px(6).gap(4).rounded(8).items_center().bg(color + "1f").text_color(color).text_size(10.5)
+    return h_flex().flex_none().h(16).px(6).gap(4).rounded(8).items_center().bg(color + "1f").text_color(color).text_size(11.5)
       .child(svg(`mods/workspace-chrome/${icon}.svg`).size(10).flex_none())
       .child(text);
   }
@@ -181,8 +221,8 @@ export default class Agents extends View {
       .w_full()
       .p(5)
       .bg(t.popover)
-      .text_size(12.8)
-      .child(div().px(8).pt(4).pb(6).text_size(11).text_color(t.dim).child("Sort agents"))
+      .text_size(13)
+      .child(div().px(8).pt(4).pb(6).text_size(11.5).text_color(t.dim).child("Sort agents"))
       .children(SORTS.map((s) => h_flex()
         .id(`sort-${s.id}`)
         .h(31)
@@ -231,7 +271,7 @@ export default class Agents extends View {
       .flex_none()
       .gap(0)
       .items_center()
-      .text_size(12.5)
+      .text_size(13)
       .when(on, (el) => el.bg(t.raised))
       .hover((s) => s.bg(t.hover))
       .on_click(() => (this.listed.has(k.address) ? run("pane.focus", { terminal: k.address }) : this.peek(k.address)))
@@ -247,8 +287,8 @@ export default class Agents extends View {
   status(t, a, compact = false) {
     const color = t[a.status] ?? t.dim;
     if (a.status === "working") return svg("mods/workspace-chrome/spinner.svg").size(11).mx(1).flex_none().text_color(t.working).spin(900);
-    if (a.status === "blocked" && compact) return div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(10.5).font_bold().text_color(t.blocked).flex().items_center().justify_center().child("!");
-    if (a.status === "blocked") return div().flex_none().px(6).h(18).rounded(5).bg(t.blocked + "26").text_size(10.5).font_semibold().text_color(t.blocked).flex().items_center().child("Needs you");
+    if (a.status === "blocked" && compact) return div().size(14).flex_none().rounded(4).bg(t.blocked + "26").text_size(11.5).font_bold().text_color(t.blocked).flex().items_center().justify_center().child("!");
+    if (a.status === "blocked") return div().flex_none().px(6).h(18).rounded(5).bg(t.blocked + "26").text_size(11.5).font_semibold().text_color(t.blocked).flex().items_center().child("Needs you");
     // Idle: a ring; done: a dot.
     if (a.status === "idle") return div().size(7).mx(3).flex_none().rounded(4).border(1.5).border_color(t.idle ?? t.dim);
     return div().size(7).mx(3).flex_none().rounded(4).bg(a.status === "done" ? color : t.dim + "00");
@@ -301,7 +341,7 @@ export default class Agents extends View {
         .flex()
         .items_center()
         .rounded(4)
-        .text_size(11)
+        .text_size(11.5)
         .text_color(open ? t.dim : (t[top] ?? t.dim))
         .cursor_pointer()
         .hover((s) => s.bg(t.hover).text_color(t.foreground))
@@ -382,41 +422,68 @@ export default class Agents extends View {
         info.shells ? this.chip(plural(info.shells, "shell"), C.shell, "terminal") : null,
       ].filter(Boolean);
       // Right of the title: the pin on hover, else the status badge, else (idle) how long ago.
-      const side = this.hovered === a.address ? pin
-        : LABEL[a.status] ? div().flex_none().h(16).px(6).rounded(8).bg(col + "29").text_color(col).text_size(10.5).font_semibold().flex().items_center().child(LABEL[a.status])
-        : when ? div().flex_none().text_size(11).text_color(t.dim).child(duration(now - when)) : null;
+      // Stop: only for an agent that isn't working; a first click asks, a second one stops.
+      const asking = this.confirming === a.address;
+      const stop = a.status === "working" ? null : div()
+        .id(`stop-${a.address}`)
+        .flex_none()
+        .h(17)
+        .px(asking ? 7 : 3)
+        .rounded(5)
+        .flex()
+        .items_center()
+        .gap(4)
+        .text_size(11.5)
+        .cursor_pointer()
+        .when(asking, (el) => el.bg(C.blocked).text_color("#1e1e2e").font_bold().child("Confirmer ?"))
+        .when(!asking, (el) => el.text_color(t.dim).hover((s) => s.bg(C.blocked + "33").text_color(C.blocked))
+          .tooltip("Arrêter la session (reprenable avec claude --resume)")
+          .child(svg("mods/workspace-chrome/x.svg").size(13)))
+        .on_click((_e, cx) => {
+          cx.stop_propagation();
+          if (asking) this.stopAgent(a, cx);
+          else { this.confirming = a.address; cx.notify(); }
+        });
+      if (!this.hovered && this.confirming === a.address) this.confirming = null;
+      const side = this.stopping.has(a.address) ? div().flex_none().text_size(11.5).text_color(C.blocked).child("Arrêt…")
+        : this.hovered === a.address ? h_flex().gap(2).items_center().child(pin).when(Boolean(stop), (el) => el.child(stop))
+        : LABEL[a.status] ? div().flex_none().h(17).px(7).rounded(9).bg(col).text_color("#1e1e2e").text_size(11.5).font_bold().flex().items_center().child(LABEL[a.status])
+        : when ? div().flex_none().text_size(11.5).text_color(t.dim).child(duration(now - when)) : null;
       return h_flex()
         .id(`ag-${a.address}`)
         .mb(1)
-        .px(8)
-        .py(4)
+        .relative()
+        .pl(6)
+        .pr(8)
+        .py(5)
         .flex_none()
         .rounded(10)
         .items_center()
         .gap(9)
-        // No background except the selected one (and a hint on hover).
-        .border_1()
-        .border_color(a.focused ? C.selectedBorder + "99" : "#00000000")
-        .when(a.focused, (el) => el.bg(C.selected))
+                // Selected: the same quiet grey as the selected space, no colored frame.
+        .when(a.focused, (el) => el.bg(t.selected))
         .cursor_pointer()
-        .hover((s) => s.bg(a.focused ? C.selected : C.cardHover))
+        .hover((s) => s.bg(a.focused ? t.selected : C.cardHover))
         .on_hover((on, cx) => {
           if (on) this.hovered = a.address;
           else if (this.hovered === a.address) this.hovered = null;
           cx.notify();
         })
         .on_click(() => run("pane.focus", { pane: a.pane }))
+        // The status bar on the left: a strong cue, no card background (only the selection has one).
+        .when(a.status !== "idle", (el) => el.child(div().absolute().left(0).top(8).bottom(8).w(3).rounded(2).bg(col)))
         .child(this.bigStatus(a))
         .child(v_flex().flex_1().min_w(0).gap(1)
           .child(h_flex().gap(6).items_center().min_h(16)
-            .child(div().flex_1().min_w(0).truncate().text_size(12.5).font_semibold().text_color(C.title).child(info.title || name))
-            .when(Boolean(machine), (el) => el.child(div().text_size(10).text_color(t.dim).child(machine)))
+            .child(div().flex_1().min_w(0).truncate().text_size(13).font_semibold().text_color(a.status === "idle" ? C.idleTitle : C.title).child(info.title || name))
+            .when(Boolean(machine), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(machine)))
             .when(subs.length > 0, (el) => el.child(fold(a, subs)))
             .when(Boolean(side), (el) => el.child(side)))
-          // Last request, with the sub-agents and shells chips on the same line.
-          .when(Boolean(info.last) || extras.length > 0, (el) => el.child(h_flex().gap(5).items_center()
-            .child(div().flex_1().min_w(0).truncate().text_size(11).text_color(C.desc).child(info.last ?? ""))
-            .children(extras))));
+          // Its space as a tag, its last request, then the sub-agents and shells chips.
+          .child(h_flex().gap(6).items_center()
+            .child(this.spaceTag(a))
+            .child(div().flex_1().min_w(0).truncate().text_size(11.5).text_color(C.desc).child(info.last || a.space_name || ""))
+            .children(extras)));
     };
 
     // Groups in list order: spaces (grouped) or priority sections. Agents of a
@@ -441,7 +508,7 @@ export default class Agents extends View {
         .flex_none()
         .gap(6)
         .items_center()
-        .text_size(11)
+        .text_size(11.5)
         .font_medium()
         .cursor_pointer()
         .hover((s) => s.text_color(t.foreground))
@@ -456,9 +523,7 @@ export default class Agents extends View {
           .when(!byPriority && top && top !== "idle", (el) => el.child(this.status(t, { status: top }, true)))
           .child(svg("mods/workspace-chrome/chevron-right.svg").size(11).flex_none().text_color(t.dim)));
     };
-    const rows = collapsed
-      ? list.flatMap(withKids)
-      : groups.flatMap((g) => [header(g), ...(this.folded.has(g.id) ? [] : g.members.flatMap(withKids))]);
+    const rows = list.flatMap(withKids);
 
     return v_flex()
       .size_full()
@@ -478,20 +543,20 @@ export default class Agents extends View {
             .items_center()
             .justify_between()
             .child(div().text_size(11.5).font_medium().text_color(t.dim).child("Agents"))
-            .child(
+            .when(false, (el) => el.child(
               div()
                 .id("ag-sort")
-                .text_size(11)
+                .text_size(11.5)
                 .text_color(t.dim)
                 .hover((s) => s.text_color(t.foreground))
                 .on_click(() => openOverlay({ mod: "claude-agents", kind: "popup", width: 200, height: 140, props: { sortMenu: true } }))
                 .tooltip(`Sort agents: ${sort.label}`)
                 .child(svg(`mods/workspace-chrome/${sort.icon}.svg`).size(14)),
-            ),
+            )),
         ),
       )
       .when(list.length === 0 && !collapsed, (el) =>
-        el.child(div().px(12).text_size(12).text_color(t.dim).child("No agent status yet. Agents show up here when they report their status. Older versions and agents inside tmux may not.")),
+        el.child(div().px(12).text_size(11.5).text_color(t.dim).child("No agent status yet. Agents show up here when they report their status. Older versions and agents inside tmux may not.")),
       )
       .child(v_flex().id("ag-list").flex_1().min_h(0).px(collapsed ? 0 : 8).overflow_y_scrollbar().mode("always").children(rows))
       .when(collapsed, (el) =>

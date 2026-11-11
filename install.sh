@@ -1,21 +1,17 @@
 #!/usr/bin/env bash
 # Installe l'environnement Ghostty/Guake + herdr (Ubuntu). Relançable sans risque : chaque étape vérifie avant d'agir.
-# Usage : ./install.sh console|fenetre
-#   console : touche ² → console plein écran par-dessus tout (affichée/masquée, hors dock)
-#   fenetre : icône « Console » dans le dock → fenêtre normale agrandie (bordure, réduire, fermer)
+# Touche ² : app Herdr (bin/console) ; * du pavé numérique : Guake.
 set -euo pipefail
-MODE=${1:-}
-[[ $MODE == console || $MODE == fenetre ]] || { echo "Usage : $0 console|fenetre (console : touche ² plein écran ; fenetre : icône du dock, fenêtre normale)"; exit 1; }
 D=$(cd "$(dirname "$0")" && pwd)
 mkdir -p ~/.local/bin && export PATH=~/.local/bin:$PATH  # herdr, starship, tode… : visibles dès cette exécution
-[[ ${XDG_SESSION_TYPE:-x11} == x11 ]] || echo "!! Session $XDG_SESSION_TYPE : bin/console et le clic molette demandent X11 (« Ubuntu sur Xorg », roue dentée à l'écran de connexion)"
+[[ ${XDG_SESSION_TYPE:-x11} == x11 ]] || echo "!! Session $XDG_SESSION_TYPE : la touche ² (bin/console) demande X11 (« Ubuntu sur Xorg », roue dentée à l'écran de connexion)"
 
 echo "== Paquets"
 missing=()
 for p in zsh guake jq curl git; do command -v $p >/dev/null || missing+=($p); done
 command -v dconf >/dev/null || missing+=(dconf-cli)  # réglages Guake
-python3 -c 'import Xlib' 2>/dev/null || missing+=(python3-xlib)  # bin/middle-paste
 python3 -c "import gi; gi.require_version('Wnck', '3.0')" 2>/dev/null || missing+=(python3-gi gir1.2-wnck-3.0)  # bin/console
+fc-list : family | grep -q "Ubuntu Sans Mono" || missing+=(fonts-ubuntu)  # police des terminaux de l'app Herdr
 if ! command -v ghostty >/dev/null; then  # pas dans les dépôts Ubuntu : PPA communautaire de Mike Kasberg (cité par ghostty.org)
   sudo add-apt-repository -y ppa:mkasberg/ghostty-ubuntu
   missing+=(ghostty)
@@ -66,9 +62,17 @@ link "$D/zsh/zshrc" ~/.zshrc  # réglages propres au PC : ~/.zshrc.local (hors r
 echo "== App Herdr (herdr-core) : sidebar des agents, barre d'état (Nettoyer), atelier firmware"
 command -v herdr-app >/dev/null || [[ -x ~/.local/bin/herdr-app ]] || curl -fsSL https://releases.herdr.dev/app/install.sh | sh
 for m in "$D"/herdr-app/mods/*/; do m=${m%/}; link "$m" ~/.config/herdr-app/mods/${m##*/}; done
-link "$D/herdr-app/layouts/kevin.json" ~/.config/herdr-app/layouts/kevin.json  # à choisir avec Ctrl+Shift+L
+link "$D/herdr-app/layouts/kevin.json" ~/.config/herdr-app/layouts/kevin.json
+# réglages (zoom, sons…) : ceux du repo s'ajoutent aux existants ; pas de lien, l'app réécrit ce fichier
+A=~/.config/herdr-app/settings.json; [[ -f $A ]] || echo '{}' >$A
+jq -s '.[0] * .[1]' $A "$D/herdr-app/settings.json" >$A.tmp && mv $A.tmp $A
+# mise en page « kevin » affichée : app ouverte → tout de suite, sinon au prochain démarrage
+herdr-app do layout.switch --name kevin >/dev/null 2>&1 || {
+  A=~/.config/herdr-app/shared.json; [[ -f $A ]] || echo '{}' >$A
+  jq '.layout = "kevin"' $A >$A.tmp && mv $A.tmp $A
+}
 
-echo "== Mode $MODE"
+echo "== Raccourcis : ² → app Herdr, * → Guake"
 K=org.gnome.settings-daemon.plugins.media-keys
 P=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
 shortcut() {  # shortcut <customN> <nom> <commande> <touche>
@@ -82,31 +86,14 @@ shortcut() {  # shortcut <customN> <nom> <commande> <touche>
   gsettings set $K custom-keybindings "$l"
 }
 shortcut custom0 guake 'env GDK_BACKEND=x11 guake -t' KP_Multiply  # * du pavé numérique → Guake (transition)
+shortcut custom1 'app herdr' "$D/bin/console" section  # ² : app Herdr devant sur l'écran de la souris, ou réduite
+# ancien lanceur « Console » (Ghostty) : retiré du dock
+rm -f ~/.local/share/applications/console.desktop
 fav=$(gsettings get org.gnome.shell favorite-apps)
-L=~/.local/share/applications/console.desktop
-if [[ $MODE == console ]]; then  # l'autre mode est retiré : on peut changer de mode en relançant le script
-  shortcut custom1 'console ghostty' "$D/bin/console" section
-  rm -f $L
-  gsettings set org.gnome.shell favorite-apps "$(sed "s/, 'console.desktop'//; s/'console.desktop', \?//; s/'console.desktop'//" <<<"$fav")"
-else
-  shortcut custom1 'console ghostty' "$D/bin/console" ''  # ² désactivée
-  mkdir -p ~/.local/share/applications
-  cat > $L <<EOF
-[Desktop Entry]
-Type=Application
-Name=Console
-Comment=herdr dans une fenêtre normale
-Exec=$D/bin/console --window
-Icon=com.mitchellh.ghostty
-Terminal=false
-StartupWMClass=ch.dotfiles.window
-Categories=System;TerminalEmulator;
-EOF
-  [[ $fav == *console.desktop* ]] || gsettings set org.gnome.shell favorite-apps "${fav%]}, 'console.desktop']"
-fi
+gsettings set org.gnome.shell favorite-apps "$(sed "s/, 'console.desktop'//; s/'console.desktop', \?//; s/'console.desktop'//" <<<"$fav")"
 
 echo "== Réglages Guake"
 dconf load /org/guake/ < "$D/guake/guake.dconf"
 gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
 
-echo "OK. Déconnecte-toi puis reconnecte-toi (shell zsh, ~/.local/bin dans le PATH), puis $([[ $MODE == console ]] && echo "touche ²" || echo "icône « Console » du dock")."
+echo "OK. Déconnecte-toi puis reconnecte-toi (shell zsh, ~/.local/bin dans le PATH), puis touche ²."

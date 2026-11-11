@@ -1,6 +1,6 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, agents, theme, run, window, keys, layout, shared, setShared, updates, panes, terminals, home, props, openOverlay, closeOverlay } from "herdr";
+import { spaces, agents, theme, run, window, keys, layout, shared, setShared, updates, panes, terminals, home, props, openOverlay, closeOverlay, hc, exec } from "herdr";
 
 const RED = "#f38ba8";
 
@@ -46,26 +46,41 @@ export default class WorkspaceStatus extends View {
         else if (perTab.get(p.tab) === 1 && seen.has(key)) out.push({ pane: p.pane, label, why: "shell en double dans ce dossier" });
         seen.add(key);
       } else if (p.status === "idle" && t.status_ms && now - t.status_ms > 2 * 86400000) {
-        out.push({ pane: p.pane, label, why: `agent inactif depuis ${Math.floor((now - t.status_ms) / 86400000)} jours` });
+        out.push({ pane: p.pane, agent: p.terminal, label, why: `agent inactif depuis ${Math.floor((now - t.status_ms) / 86400000)} jours` });
       }
     }
     return out;
   }
 
+  // An agent stops cleanly (/exit, then its shell's pane closes), like the agents list's Stop button.
+  stop(c, cx) {
+    cx.spawn(async () => {
+      try {
+        await hc(["send", c.agent, "/exit"]);
+        for (let i = 0; i < 40; i++) {
+          const r = await hc(["get", c.agent, "--json"]);
+          if (["zsh", "bash", "sh", "fish"].includes(JSON.parse(r.stdout).foreground?.name)) break;
+          await exec("sleep", ["0.5"]);
+        }
+      } catch {}
+      run("pane.close", { pane: c.pane });
+    });
+  }
+
   cleanList(t) {
     const list = this.candidates();
-    const close = (c) => run("pane.close", { pane: c.pane });
-    return v_flex().w_full().p(8).gap(2).bg(t.popover).text_size(12.5)
-      .child(div().px(6).pb(4).text_size(11).text_color(t.dim).child(list.length ? "À nettoyer" : "Rien à nettoyer"))
+    const close = (c, cx) => (c.agent ? this.stop(c, cx) : run("pane.close", { pane: c.pane }));
+    return v_flex().w_full().p(8).gap(2).bg(t.popover).text_size(13)
+      .child(div().px(6).pb(4).text_size(11.5).text_color(t.dim).child(list.length ? "À nettoyer" : "Rien à nettoyer"))
       .children(list.map((c, i) => h_flex().id(`c-${i}`).gap(8).px(6).py(4).rounded(6).items_center().hover((s) => s.bg(t.hover))
         .child(v_flex().flex_1().min_w(0)
           .child(div().truncate().text_color(t.foreground).child(c.label))
-          .child(div().text_size(11).text_color(t.dim).child(c.why)))
+          .child(div().text_size(11.5).text_color(t.dim).child(c.why)))
         .child(div().id(`x-${i}`).px(8).h(22).rounded(5).flex().items_center().text_size(11.5).text_color(RED).bg(RED + "1f")
-          .cursor_pointer().hover((s) => s.bg(RED + "38")).on_click(() => close(c)).child("Fermer"))))
+          .cursor_pointer().hover((s) => s.bg(RED + "38")).on_click((_e, cx) => close(c, cx)).child(c.agent ? "Arrêter" : "Fermer"))))
       .when(list.length > 1, (el) => el.child(div().id("all").mt(6).h(28).rounded(6).flex().items_center().justify_center()
         .text_color(RED).bg(RED + "1f").cursor_pointer().hover((s) => s.bg(RED + "38"))
-        .on_click(() => { list.forEach(close); closeOverlay(props().overlay); })
+        .on_click((_e, cx) => list.forEach((c) => close(c, cx)))
         .child(`Tout fermer (${list.length})`)));
   }
 
@@ -88,7 +103,7 @@ export default class WorkspaceStatus extends View {
     const list = agents();
     const needs = list.filter(a => a.status === "blocked").length;
     const label = (icon, text) => h_flex().gap(6).items_center().child(svg(`mods/workspace-chrome/${icon}.svg`).size(13)).child(text);
-    return h_flex().size_full().px(14).gap(16).items_center().bg(t.chrome).border_t(1).border_color(t.border).text_size(11.8).text_color(t.muted)
+    return h_flex().size_full().px(14).gap(16).items_center().bg(t.chrome).border_t(1).border_color(t.border).text_size(11.5).text_color(t.muted)
       .child(label(space?.machine ? "server" : "monitor", space?.machine ?? "This computer"))
       .when(Boolean(space?.branch), el => el.child(label("branch", space.branch)))
       .child(h_flex().gap(6).items_center().child(div().size(6).rounded(3).bg(t.dim)).child(`${list.length} agents`)

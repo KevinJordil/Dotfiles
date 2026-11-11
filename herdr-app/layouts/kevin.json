@@ -18,10 +18,10 @@
               "id": "spaces",
               "type": "block",
               "content": {
-                "mod": "spaces"
+                "mod": "kevin-spaces"
               },
               "size": {
-                "weight": 1
+                "px": 290
               },
               "min": 90
             },
@@ -40,7 +40,7 @@
         }
       ],
       "size": {
-        "px": 268
+        "px": 330
       },
       "min": 44,
       "max": 480,
@@ -55,10 +55,10 @@
           "id": "tabs",
           "type": "block",
           "content": {
-            "mod": "tabs"
+            "mod": "kevin-tabs"
           },
           "size": {
-            "px": 42
+            "px": 36
           },
           "window_drag": true
         },
@@ -159,5 +159,8 @@
   "traffic_lights": [
     12,
     16
-  ]
+  ],
+  "font": "Ubuntu Sans Mono",
+  "font_size": 13,
+  "ui_font": "Inter"
 }

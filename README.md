@@ -7,27 +7,28 @@ Guake reste disponible sur `*` du pavé numérique, le temps de la transition (m
 ## Installer (Ubuntu)
 
 ```sh
-git clone <ce repo> ~/dotfiles && ~/dotfiles/install.sh console   # ou : fenetre
+git clone <ce repo> ~/dotfiles && ~/dotfiles/install.sh
 ```
 
 Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran de connexion) : la console et le clic molette passent par Wnck/Xlib. Se déconnecter puis se reconnecter après l'installation.
 
-`install.sh` installe Ghostty (PPA `mkasberg/ghostty-ubuntu`) + zsh + Oh My Zsh + Starship + zsh-autosuggestions + herdr + terminal-browser + tode, installe le mode choisi (obligatoire) — `console` : touche `²` → console plein écran par-dessus tout ; `fenetre` : icône « Console » dans le dock → fenêtre normale agrandie (bordure, réduire, fermer) — plus `*` → Guake, et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque, aussi pour changer de mode (l'autre est retiré).
+`install.sh` installe Ghostty (PPA `mkasberg/ghostty-ubuntu`) + zsh + Oh My Zsh + Starship + zsh-autosuggestions + herdr + terminal-browser + tode, installe l'app Herdr, crée les raccourcis GNOME (`²` → app Herdr, `*` → Guake), et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque.
 
 ## Contenu
 
 | Fichier | Rôle | Installé en |
 |---|---|---|
 | `herdr/config.toml` | thème Catppuccin, raccourcis, date/heure dans la barre des tabs, sidebar des agents Claude (voir `bin/herdr-agents`), `Ctrl+B Shift+←/→` déplace un tab, cwd suivi | `~/.config/herdr/config.toml` (lien) |
-| `bin/console` | affiche/masque la console Ghostty (touche `²`), plein écran sur l'écran de la souris, hors barre des tâches ; `--window` : même session dans une fenêtre normale agrandie (lanceur « Console » du dock) | appelé par le raccourci GNOME |
-| `bin/middle-paste` | clic molette dans la console = coller le presse-papier (herdr ignore ce clic) | lancé par `bin/console` |
+| `bin/console` | touche `²` : amène l'app Herdr devant sur l'écran de la souris (agrandie, pas plein écran) ; déjà au premier plan, la réduit ; la lance si besoin | appelé par le raccourci GNOME |
 | `bin/herdr-agents` | sidebar des agents Claude : sujet de la session coloré selon l'état (blanc idle, vert fini, rouge bloqué, jaune en cours, avec spinner), dernière demande, sous-agents et shells encore ouverts | lancé par `zsh/herdr.zsh` |
 | `bin/agent-subagents` | hooks Claude Code `SubagentStart` / `SubagentStop` : sous-agents en cours, comptés dans la sidebar | `~/.claude/settings.json` (par `install.sh`) |
 | `bin/agent-session` | hooks Claude Code `SessionStart` / `SessionEnd` : dans l'app Herdr, retient la session Claude de chaque terminal (`/exit` l'oublie) | `~/.claude/settings.json` (par `install.sh`) |
 | `bin/herdr-app-restore` | après un redémarrage, reprend dans chaque terminal de l'app la session Claude retenue | autostart GNOME (par `install.sh`) |
 | `bin/herdr-app-agents` | titre, dernière demande, sous-agents et shells de chaque Claude de l'app, pour le mod `claude-agents` | appelé par le mod |
-| `herdr-app/layouts/kevin.json` | mise en page de l'app Herdr : sans en-tête ni pied, agents et barre d'état personnalisés | `~/.config/herdr-app/layouts` (lien, `Ctrl+Shift+L`) |
-| `herdr-app/mods/claude-agents` | agents en cartes : icône d'état (spinner, ✔, !), titre du projet, dernière demande, sous-agents et shells | `~/.config/herdr-app/mods` (lien) |
+| `herdr-app/layouts/kevin.json` | mise en page de l'app Herdr : sans en-tête ni pied, agents et barre d'état personnalisés | `~/.config/herdr-app/layouts` (lien, activée par `install.sh`) |
+| `herdr-app/settings.json` | réglages de l'app : zoom 1,2, sons | fusionné dans `~/.config/herdr-app/settings.json` |
+| `herdr-app/mods/kevin-spaces` | spaces sur deux lignes : nom, puis tabs, agents (en cours, finis, bloqués) et accès direct aux panneaux (ex. Atelier) | `~/.config/herdr-app/mods` (lien) |
+| `herdr-app/mods/claude-agents` | agents en cartes, une seule liste dans l'ordre des spaces : icône d'état (spinner, ✔, !), titre du projet, dernière demande, sous-agents et shells | `~/.config/herdr-app/mods` (lien) |
 | `herdr-app/mods/kevin-status` | barre d'état : **Nettoyer** (shells en double ou dans `~`, agents inactifs 2 jours), recherche, barre latérale, machines, réglages | `~/.config/herdr-app/mods` (lien) |
 | `herdr-app/mods/firmware` | tab « Atelier » du space Firmware : flasher carte et modules, logs, sysinfo, ports série, pour la carte choisie | `~/.config/herdr-app/mods` (lien) |
 | `bin/agent-summary` | hook Claude Code `UserPromptSubmit` : Haiku résume en arrière-plan le sujet de la session (adapté à chaque demande) et la dernière demande | `~/.claude/settings.json` (par `install.sh`) |
@@ -56,3 +57,4 @@ Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran d
 - Variables, alias et fonctions propres à un PC (pro, chemins locaux) : dans `~/.zshrc.local`, jamais versionné.
 - Réglages Guake modifiés ? `dconf dump /org/guake/ | grep -v '^schema-version=' > ~/dotfiles/guake/guake.dconf`
 - Config herdr modifiée ? `herdr config check` puis `herdr server reload-config`.
+- Mods de l'app modifiés dans `~/dotfiles/herdr-app` ? L'app ne voit pas les changements à travers les liens : `Ctrl+Shift+L` deux fois (changer de mise en page et revenir) les recharge.

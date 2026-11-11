@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Hooks Claude Code SubagentStart / SubagentStop (argument start|stop) : un fichier par sous-agent en cours,
-# compté par bin/herdr-agents pour la sidebar.
+# compté pour la sidebar par bin/herdr-agents (console) et bin/herdr-app-agents (app Herdr).
 in=$(cat)
-d=~/.cache/herdr-agents/$(jq -r .session_id <<<"$in").sub
+# app Herdr : par terminal (HC_TERMINAL_ID), lu par bin/herdr-app-agents ; console : par session
+if [[ $HC_TERMINAL_ID ]]; then d=~/.cache/herdr-agents/hc-$HC_TERMINAL_ID.sub; else d=~/.cache/herdr-agents/$(jq -r .session_id <<<"$in").sub; fi
 mkdir -p "$d"
 if [[ $1 == start ]]; then touch "$d/$(jq -r .agent_id <<<"$in")"; else rm -f "$d/$(jq -r .agent_id <<<"$in")"; fi

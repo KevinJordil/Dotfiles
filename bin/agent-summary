@@ -22,7 +22,7 @@ D=~/.cache/herdr-agents
 mkdir -p "$D"
 
 ask() {
-  printf '%s\n' "Tu nommes une session de travail d'un développeur. Titre actuel : « $(cat "$D/$sid.title" 2>/dev/null || echo aucun) »." \
+  printf '%s\n' "Tu nommes une session de travail d'un développeur. Titre actuel : « $(cat "$D/$sid.title" 2>/dev/null || cat "$D/hc-$HC_TERMINAL_ID.title" 2>/dev/null || echo aucun) »." \
     "Projet : dossier $root${repo:+ (repo git ${repo##*/})}." \
     "${about:+Début du README / CLAUDE.md : « $about ».}" \
     "Contenu du dossier : $(ls "$root" 2>/dev/null | head -25 | tr '\n' ' ')" \
@@ -52,5 +52,9 @@ fit() {  # dernier recours : coupe au dernier mot entier qui tient
   [[ $title && $last ]] || exit
   fit "$title" 31 >"$D/$sid.title"
   fit "$last" 31 >"$D/$sid.last"
+  # app Herdr (herdr-core) : aussi par terminal, lu par bin/herdr-app-agents
+  [[ $HC_TERMINAL_ID ]] && cp "$D/$sid.title" "$D/hc-$HC_TERMINAL_ID.title" && cp "$D/$sid.last" "$D/hc-$HC_TERMINAL_ID.last" &&
+    tab=$(hc get "$HC_TERMINAL_ID" --json | jq -r '.labels["herdr.tab"] // empty') && [[ $tab ]] &&
+    herdr-app do tab.rename --id "$tab" --name "$(<"$D/$sid.title")"  # le tab porte le titre de son agent
 ) </dev/null >/dev/null 2>&1 &
 disown

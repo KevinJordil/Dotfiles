@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Hooks Claude Code SessionStart / SessionEnd (argument start|end), dans l'app Herdr seulement :
+# retient la session Claude de chaque terminal herdr-core (~/.cache/herdr-agents/hc-<t>.sid)
+# pour que bin/herdr-app-restore la reprenne après un redémarrage. Quitter Claude (/exit) l'oublie.
+[[ $HC_TERMINAL_ID ]] || exit 0
+in=$(cat)
+f=~/.cache/herdr-agents/hc-$HC_TERMINAL_ID.sid
+mkdir -p "${f%/*}"
+if [[ $1 == start ]]; then
+  jq -r .session_id <<<"$in" >"$f"
+else
+  case $(jq -r .reason <<<"$in") in prompt_input_exit | logout) rm -f "$f" ;; esac  # arrêt voulu ; pas un redémarrage
+fi

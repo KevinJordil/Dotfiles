@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Pour le mod claude-agents de l'app Herdr : {terminal: {title, last, shells, subagents}} de chaque Claude lancé
+# par herdr-core (variable HC_TERMINAL_ID). Titre et dernière demande écrits par bin/agent-summary,
+# sous-agents par bin/agent-subagents, shells = tâches Bash encore ouvertes (comme bin/herdr-agents).
+D=~/.cache/herdr-agents
+for pid in $(pgrep -x claude); do
+  t=$(tr '\0' '\n' </proc/"$pid"/environ 2>/dev/null | sed -n 's/^HC_TERMINAL_ID=//p')
+  [[ $t ]] || continue
+  jq -n --arg t "$t" --arg title "$(cat "$D/hc-$t.title" 2>/dev/null)" --arg last "$(cat "$D/hc-$t.last" 2>/dev/null)" \
+    --argjson shells "$(pgrep -c -P "$pid" -f shell-snapshots)" \
+    --argjson subagents "$(find "$D/hc-$t.sub" -type f -mmin -120 2>/dev/null | wc -l)" \
+    '{($t): {title: $title, last: $last, shells: $shells, subagents: $subagents}}'
+done | jq -s 'add // {}'

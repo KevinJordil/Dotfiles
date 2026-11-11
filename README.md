@@ -23,6 +23,13 @@ Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran d
 | `bin/middle-paste` | clic molette dans la console = coller le presse-papier (herdr ignore ce clic) | lancé par `bin/console` |
 | `bin/herdr-agents` | sidebar des agents Claude : sujet de la session coloré selon l'état (blanc idle, vert fini, rouge bloqué, jaune en cours, avec spinner), dernière demande, sous-agents et shells encore ouverts | lancé par `zsh/herdr.zsh` |
 | `bin/agent-subagents` | hooks Claude Code `SubagentStart` / `SubagentStop` : sous-agents en cours, comptés dans la sidebar | `~/.claude/settings.json` (par `install.sh`) |
+| `bin/agent-session` | hooks Claude Code `SessionStart` / `SessionEnd` : dans l'app Herdr, retient la session Claude de chaque terminal (`/exit` l'oublie) | `~/.claude/settings.json` (par `install.sh`) |
+| `bin/herdr-app-restore` | après un redémarrage, reprend dans chaque terminal de l'app la session Claude retenue | autostart GNOME (par `install.sh`) |
+| `bin/herdr-app-agents` | titre, dernière demande, sous-agents et shells de chaque Claude de l'app, pour le mod `claude-agents` | appelé par le mod |
+| `herdr-app/layouts/kevin.json` | mise en page de l'app Herdr : sans en-tête ni pied, agents et barre d'état personnalisés | `~/.config/herdr-app/layouts` (lien, `Ctrl+Shift+L`) |
+| `herdr-app/mods/claude-agents` | agents en cartes : icône d'état (spinner, ✔, !), titre du projet, dernière demande, sous-agents et shells | `~/.config/herdr-app/mods` (lien) |
+| `herdr-app/mods/kevin-status` | barre d'état : **Nettoyer** (shells en double ou dans `~`, agents inactifs 2 jours), recherche, barre latérale, machines, réglages | `~/.config/herdr-app/mods` (lien) |
+| `herdr-app/mods/firmware` | tab « Atelier » du space Firmware : flasher carte et modules, logs, sysinfo, ports série, pour la carte choisie | `~/.config/herdr-app/mods` (lien) |
 | `bin/agent-summary` | hook Claude Code `UserPromptSubmit` : Haiku résume en arrière-plan le sujet de la session (adapté à chaque demande) et la dernière demande | `~/.claude/settings.json` (par `install.sh`) |
 | `ghostty/config` | police Roboto Mono, Catppuccin Mocha, fond `#11111b`, sans décoration | `~/.config/ghostty/config` (lien) |
 | `guake/guake.dconf` | réglages Guake (transition) : un seul onglet, plein écran, mêmes couleurs, touche `*` | chargé avec `dconf load` |

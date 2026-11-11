@@ -33,6 +33,12 @@ if command -v claude >/dev/null; then
   grep -q agent-summary $S || { jq --arg c "$D/bin/agent-summary" '.hooks.UserPromptSubmit += [{hooks: [{type: "command", command: $c}]}]' $S >$S.tmp && mv $S.tmp $S; }
   grep -q agent-subagents $S || { jq --arg c "$D/bin/agent-subagents" '.hooks.SubagentStart += [{hooks: [{type: "command", command: "\($c) start"}]}]
     | .hooks.SubagentStop += [{hooks: [{type: "command", command: "\($c) stop"}]}]' $S >$S.tmp && mv $S.tmp $S; }
+  # app Herdr : session Claude de chaque terminal retenue (bin/agent-session), reprise à l'ouverture de session
+  grep -q agent-session $S || { jq --arg c "$D/bin/agent-session" '.hooks.SessionStart += [{hooks: [{type: "command", command: "\($c) start"}]}]
+    | .hooks.SessionEnd += [{hooks: [{type: "command", command: "\($c) end"}]}]' $S >$S.tmp && mv $S.tmp $S; }
+  mkdir -p ~/.config/autostart
+  printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Herdr : reprise des agents Claude' \
+    "Exec=$D/bin/herdr-app-restore" 'X-GNOME-Autostart-enabled=true' 'NoDisplay=true' >~/.config/autostart/herdr-app-restore.desktop
 fi
 
 echo "== Oh My Zsh + Starship + zsh-autosuggestions"
@@ -56,6 +62,11 @@ link() {
 link "$D/herdr/config.toml" ~/.config/herdr/config.toml
 link "$D/ghostty/config" ~/.config/ghostty/config
 link "$D/zsh/zshrc" ~/.zshrc  # réglages propres au PC : ~/.zshrc.local (hors repo)
+
+echo "== App Herdr (herdr-core) : sidebar des agents, barre d'état (Nettoyer), atelier firmware"
+command -v herdr-app >/dev/null || [[ -x ~/.local/bin/herdr-app ]] || curl -fsSL https://releases.herdr.dev/app/install.sh | sh
+for m in "$D"/herdr-app/mods/*/; do m=${m%/}; link "$m" ~/.config/herdr-app/mods/${m##*/}; done
+link "$D/herdr-app/layouts/kevin.json" ~/.config/herdr-app/layouts/kevin.json  # à choisir avec Ctrl+Shift+L
 
 echo "== Mode $MODE"
 K=org.gnome.settings-daemon.plugins.media-keys

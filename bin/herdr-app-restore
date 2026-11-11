@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# App Herdr après un redémarrage : herdr-core rend chaque terminal avec la même adresse et un shell
+# dans son dossier, sans relancer Claude. Reprend dans chaque terminal la session retenue par bin/agent-session.
+# Lancé à l'ouverture de session (autostart GNOME, voir install.sh) ; relançable sans risque.
+D=~/.cache/herdr-agents
+hc server status >/dev/null 2>&1 || hc server start >/dev/null 2>&1
+for _ in {1..30}; do live=$(hc ls --json 2>/dev/null) && break; sleep 2; done
+[[ $live ]] || exit 0
+for f in "$D"/hc-*.sid; do
+  [[ -e $f ]] || continue
+  t=${f##*/hc-} t=${t%.sid} sid=$(<"$f")
+  pgrep -f -- "--resume $sid" >/dev/null && continue  # déjà ouverte quelque part
+  jq -e --arg t "$t" 'any(.terminals[]; .address == $t)' <<<"$live" >/dev/null || { rm -f "$f"; continue; }  # terminal fermé
+  agent=$(jq -r --arg t "$t" '.terminals[] | select(.address == $t and .state == "live") | .agent // ""' <<<"$live")
+  case $agent in zsh | bash | sh) hc send "$t" "claude --resume $sid" >/dev/null && echo "repris : $t" ;; esac
+done

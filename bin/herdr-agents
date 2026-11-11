@@ -7,17 +7,24 @@
 #             Sujet et dernière demande générés par bin/agent-summary, sinon titre du terminal
 #   ligne 3 : $subagents (bin/agent-subagents) et $shells, shells encore ouverts (tâches Bash en arrière-plan)
 # done = idle et pas encore vu : herdr ne l'expose pas, on le déduit (nouvelle complétion depuis le dernier focus du pane).
-# Lancé une fois par zsh/herdr.zsh, s'arrête avec le serveur herdr.
+# Lancé une fois par zsh/herdr.zsh, s'arrête avec le serveur herdr (30 s sans réponse : survit à un redémarrage ou une mise à jour).
 set -o pipefail
 D=~/.cache/herdr-agents
 FRAMES=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
 declare -A ICON=([idle]=● [done]=✔ [blocked]=✘ [unknown]=?)
 cut() { ((${#1} > $2)) && echo "${1:0:$2-1}…" || echo "$1"; }
 plural() { (($1)) && echo "$1 $2$( (($1 > 1)) && echo s)"; }
+list() {
+  for _ in {1..15}; do
+    herdr agent list 2>/dev/null | jq -r '.result.agents[] | select(.agent == "claude")
+      | [.pane_id, .agent_session.value // "-", .terminal_title_stripped // "", .agent_status // "unknown", .completion_seq // 0, .focused] | @tsv' && return
+    sleep 2
+  done
+  return 1
+}
 declare -A seen
 f=0
-while agents=$(herdr agent list 2>/dev/null | jq -r '.result.agents[] | select(.agent == "claude")
-    | [.pane_id, .agent_session.value // "-", .terminal_title_stripped // "", .agent_status // "unknown", .completion_seq // 0, .focused] | @tsv'); do
+while agents=$(list); do
   working=() wtitle=()
   while IFS=$'\t' read -r p sid term status cseq focused; do
     [[ $p ]] || continue

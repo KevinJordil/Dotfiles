@@ -54,12 +54,14 @@ others=$(ls "$O" 2>/dev/null | sed -n 's/\.token$//p' | jq -R . | jq -s .)
 # subscriptionType retenu à la connexion), celles des autres choisies à leur ajout (claude-org plan)
 plans=$(for f in "$O"/*.plan; do [[ -f $f ]] && jq -n --arg k "$(basename "$f" .plan)" --arg v "$(head -1 "$f")" '{($k): $v}'; done | jq -s 'add // {}')
 # org : celle du terminal ; default : celle de la connexion habituelle
+# Team/Enterprise : l'organisation a l'offre, le siège ses propres limites (userRateLimitTier, ex. 5x pour un premium)
 jq -n --argjson u "$u" --argjson others "$others" --argjson plans "$plans" --arg org "$org" --slurpfile c ~/.claude.json --slurpfile k ~/.claude/.credentials.json '
   $c[0].oauthAccount as $a | ($a.organizationType // ("claude_" + ($k[0].claudeAiOauth.subscriptionType // ""))) as $t
-  | ($a.organizationRateLimitTier // $k[0].claudeAiOauth.rateLimitTier // "") as $tier | {
+  | ($a.organizationRateLimitTier // $k[0].claudeAiOauth.rateLimitTier // "") as $tier
+  | ($a.userRateLimitTier // $k[0].claudeAiOauth.rateLimitTier // "" | if test("20x") then " · 20x" elif test("5x") then " · 5x" else "" end) as $seat | {
   name: $a.fullName, email: $a.emailAddress, default: $a.organizationName,
   org: (if $org == "" then $a.organizationName else $org end), custom: ($org != ""),
-  plan: ({claude_free: "Gratuit", free: "Gratuit", claude_pro: "Pro", claude_team: "Team", claude_enterprise: "Enterprise"}[$t]
+  plan: ({claude_free: "Gratuit", free: "Gratuit", claude_pro: "Pro", claude_team: "Team\($seat)", claude_enterprise: "Enterprise\($seat)"}[$t]
     // if $t == "claude_max" then (if $tier | test("20x") then "Max 20x" elif $tier | test("5x") then "Max 5x" else "Max" end)
        elif $t == "claude_" then null else ($t | sub("^claude_"; "") | sub("_"; " "; "g") | (.[:1] | ascii_upcase) + .[1:]) end),
   plans: $plans, session: $u.five_hour, weekly: $u.seven_day, others: $others}'

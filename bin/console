@@ -27,6 +27,8 @@ def via_wnck():
     screen = Wnck.Screen.get_default()
 
     def find():
+        while GLib.MainContext.default().iteration(False):  # sans boucle d'événements, Wnck ne voit pas les nouvelles fenêtres
+            pass
         screen.force_update()
         return next((w for w in screen.get_windows() if w.get_class_group_name() == CLASS), None)
 

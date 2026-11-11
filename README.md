@@ -10,16 +10,17 @@ Guake reste disponible sur `*` du pavé numérique, le temps de la transition (m
 git clone <ce repo> ~/dotfiles && ~/dotfiles/install.sh
 ```
 
-Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran de connexion) : la console et le clic molette passent par Wnck/Xlib. Se déconnecter puis se reconnecter après l'installation.
+Fonctionne en **Wayland comme en X11** : c'est l'extension GNOME `gnome-shell/console@dotfiles.ch` qui place la console, car en Wayland un client ne peut ni déplacer ni activer la fenêtre d'un autre client. Se déconnecter puis se reconnecter après l'installation : en Wayland, le Shell ne charge une nouvelle extension qu'au démarrage de la session.
 
-`install.sh` installe Ghostty (PPA `mkasberg/ghostty-ubuntu`) + zsh + Oh My Zsh + Starship + zsh-autosuggestions + herdr + terminal-browser + tode, installe l'app Herdr, crée les raccourcis GNOME (`²` → app Herdr, `*` → Guake), et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque.
+`install.sh` installe Ghostty (PPA `mkasberg/ghostty-ubuntu`, ou le snap `ghostty` quand le PPA ne publie rien pour la version d'Ubuntu en cours — 22.04 : GTK 4.6 alors que Ghostty exige 4.14) + zsh + Oh My Zsh + Starship + zsh-autosuggestions + herdr + terminal-browser + tode, installe l'app Herdr, crée les raccourcis GNOME (`²` → app Herdr, `F12` → Guake), et met zsh en shell par défaut (mot de passe demandé). Il peut être relancé sans risque.
 
 ## Contenu
 
 | Fichier | Rôle | Installé en |
 |---|---|---|
 | `herdr/config.toml` | thème Catppuccin, raccourcis, date/heure dans la barre des tabs, sidebar des agents Claude (voir `bin/herdr-agents`), `Ctrl+B Shift+←/→` déplace un tab, cwd suivi | `~/.config/herdr/config.toml` (lien) |
-| `bin/console` | touche `²` : amène l'app Herdr devant sur l'écran de la souris (agrandie, pas plein écran) ; déjà au premier plan, la réduit ; la lance si besoin | appelé par le raccourci GNOME |
+| `bin/console` | touche `²` : amène l'app Herdr devant sur l'écran de la souris (agrandie, pas plein écran) ; déjà au premier plan sur cet écran, la réduit ; la lance si besoin. Passe par l'extension GNOME (`ToggleApp`), sinon Wnck en X11 | appelé par le raccourci GNOME |
+| `gnome-shell/console@dotfiles.ch` | extension GNOME Shell (42-44), appelée en D-Bus sur `ch.dotfiles.Console` : `ToggleApp` place l'app Herdr (écran de la souris, agrandie) ou la réduit ; `Toggle` place l'ancienne console Ghostty (plein écran, tous les bureaux, cachée d'Alt+Tab). En Wayland, seul le Shell peut déplacer la fenêtre d'un autre client | `~/.local/share/gnome-shell/extensions/` (lien) |
 | `bin/herdr-agents` | sidebar des agents Claude : sujet de la session coloré selon l'état (blanc idle, vert fini, rouge bloqué, jaune en cours, avec spinner), dernière demande, sous-agents et shells encore ouverts | lancé par `zsh/herdr.zsh` |
 | `bin/agent-subagents` | hooks Claude Code `SubagentStart` / `SubagentStop` : sous-agents en cours, comptés dans la sidebar | `~/.claude/settings.json` (par `install.sh`) |
 | `bin/agent-session` | hooks Claude Code `SessionStart` / `SessionEnd` : dans l'app Herdr, retient la session Claude de chaque terminal (`/exit` l'oublie) | `~/.claude/settings.json` (par `install.sh`) |
@@ -32,7 +33,7 @@ Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran d
 | `herdr-app/mods/kevin-status` | barre d'état : **Nettoyer** (shells en double ou dans `~`, agents inactifs 2 jours), recherche, barre latérale, machines, réglages | `~/.config/herdr-app/mods` (lien) |
 | `herdr-app/mods/firmware` | tab « Atelier » du space Firmware : flasher carte et modules, logs, sysinfo, ports série, pour la carte choisie | `~/.config/herdr-app/mods` (lien) |
 | `bin/agent-summary` | hook Claude Code `UserPromptSubmit` : Haiku résume en arrière-plan le sujet de la session (adapté à chaque demande) et la dernière demande | `~/.claude/settings.json` (par `install.sh`) |
-| `ghostty/config` | police Roboto Mono, Catppuccin Mocha, fond `#11111b`, sans décoration | `~/.config/ghostty/config` (lien) |
+| `ghostty/config` | police Roboto Mono, Catppuccin Mocha, fond `#11111b`, sans décoration, shift+clic molette = coller la sélection | `~/.config/ghostty/config` (lien) |
 | `guake/guake.dconf` | réglages Guake (transition) : un seul onglet, plein écran, mêmes couleurs, touche `*` | chargé avec `dconf load` |
 | `zsh/herdr.zsh` | lance herdr dans Guake (Ghostty le lance directement), historique par onglet principal, nom auto des sous-onglets (`dossier·programme`), fonction `nom` | sourcé en tête de `zsh/zshrc` |
 | `zsh/zshrc` | zsh générique : Oh My Zsh, Starship, plugins git/zsh-autosuggestions/docker ; source `~/.zshrc.local` | `~/.zshrc` (lien) |
@@ -49,12 +50,13 @@ Session GNOME **X11** requise (« Ubuntu sur Xorg », roue dentée à l'écran d
 | Split vertical / horizontal | `Ctrl+B v` / `Ctrl+B -` |
 | Renommer onglet principal / sous-onglet | `Ctrl+B Shift+W` / `Ctrl+B Shift+T` (ou `nom <x>`) |
 | Masquer la sidebar | `Ctrl+B b` |
+| Coller (herdr capture la souris) | `Shift+clic molette` (sélection) ou `Ctrl+Shift+V` |
 | Navigateur / VS Code dans le pane | `terminal-browser open <url>` / `tode [dossier]` |
 | Tous les raccourcis | `Ctrl+B ?` |
 
 - Restauration : herdr sauve seul layouts et dossiers (`~/.config/herdr/session.json`). Les Claude Code ouverts reprennent leur conversation.
 - Historique zsh : un fichier par onglet principal dans `~/.zsh_history.d/<nom>`. Il suit le renommage.
 - Variables, alias et fonctions propres à un PC (pro, chemins locaux) : dans `~/.zshrc.local`, jamais versionné.
-- Réglages Guake modifiés ? `dconf dump /org/guake/ | grep -v '^schema-version=' > ~/dotfiles/guake/guake.dconf`
+- Réglages Guake modifiés ? `dconf dump /org/guake/ | grep -v '^schema-version=' > $DOTFILES/guake/guake.dconf`
 - Config herdr modifiée ? `herdr config check` puis `herdr server reload-config`.
 - Mods de l'app modifiés dans `~/dotfiles/herdr-app` ? L'app ne voit pas les changements à travers les liens : `Ctrl+Shift+L` deux fois (changer de mise en page et revenir) les recharge.

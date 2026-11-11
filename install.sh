@@ -4,19 +4,36 @@
 set -euo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 mkdir -p ~/.local/bin && export PATH=~/.local/bin:$PATH  # herdr, starship, tode… : visibles dès cette exécution
-[[ ${XDG_SESSION_TYPE:-x11} == x11 ]] || echo "!! Session $XDG_SESSION_TYPE : la touche ² (bin/console) demande X11 (« Ubuntu sur Xorg », roue dentée à l'écran de connexion)"
 
 echo "== Paquets"
 missing=()
 for p in zsh guake jq curl git; do command -v $p >/dev/null || missing+=($p); done
 command -v dconf >/dev/null || missing+=(dconf-cli)  # réglages Guake
-python3 -c "import gi; gi.require_version('Wnck', '3.0')" 2>/dev/null || missing+=(python3-gi gir1.2-wnck-3.0)  # bin/console
+python3 -c "import gi; gi.require_version('Wnck', '3.0')" 2>/dev/null || missing+=(gir1.2-wnck-3.0)  # bin/console : repli X11 sans l'extension
 fc-list : family | grep -q "Ubuntu Sans Mono" || missing+=(fonts-ubuntu)  # police des terminaux de l'app Herdr
-if ! command -v ghostty >/dev/null; then  # pas dans les dépôts Ubuntu : PPA communautaire de Mike Kasberg (cité par ghostty.org)
-  sudo add-apt-repository -y ppa:mkasberg/ghostty-ubuntu
-  missing+=(ghostty)
+command -v notify-send >/dev/null || missing+=(libnotify-bin)  # bin/console : erreurs visibles depuis un raccourci
+python3 -c 'import gi; from gi.repository import Gio' 2>/dev/null || missing+=(python3-gi)  # bin/console (D-Bus)
+# Pas dans les dépôts Ubuntu : PPA communautaire de Mike Kasberg (cité par ghostty.org). Il ne publie
+# rien pour les versions trop anciennes (22.04 : GTK 4.6 < 4.14 exigé par Ghostty) et un PPA sans build
+# pour la version en cours fait échouer tout `apt update` en 404 → on retire le PPA et on prend le snap.
+. /etc/os-release
+PPA=https://ppa.launchpadcontent.net/mkasberg/ghostty-ubuntu/ubuntu
+if curl -fsI "$PPA/dists/$VERSION_CODENAME/InRelease" >/dev/null 2>&1; then
+  if ! command -v ghostty >/dev/null; then
+    command -v add-apt-repository >/dev/null || sudo apt-get install -y software-properties-common
+    sudo add-apt-repository -y ppa:mkasberg/ghostty-ubuntu
+    missing+=(ghostty)
+  fi
+else
+  LIST=/etc/apt/sources.list.d/mkasberg-ubuntu-ghostty-ubuntu-$VERSION_CODENAME.list
+  [[ -f $LIST ]] && { echo "   PPA Ghostty sans build pour $VERSION_CODENAME : retiré (il faisait échouer apt update)"; sudo rm -f "$LIST" /etc/apt/trusted.gpg.d/mkasberg-ubuntu-ghostty-ubuntu.gpg{,~}; }
+  if ! command -v ghostty >/dev/null; then
+    echo "   Ghostty par snap (il embarque son propre GTK4)"
+    command -v snap >/dev/null || { sudo apt-get update; sudo apt-get install -y snapd; }
+    sudo snap install ghostty --classic
+  fi
 fi
-(( ${#missing[@]} )) && sudo apt-get install -y "${missing[@]}"
+(( ${#missing[@]} )) && { sudo apt-get update; sudo apt-get install -y "${missing[@]}"; }
 
 echo "== herdr + navigateur (terminal-browser) + VS Code (tode) dans un pane"
 command -v herdr >/dev/null || [[ -x ~/.local/bin/herdr ]] || curl -fsSL https://herdr.dev/install.sh | sh
@@ -72,7 +89,19 @@ herdr-app do layout.switch --name kevin >/dev/null 2>&1 || {
   jq '.layout = "kevin"' $A >$A.tmp && mv $A.tmp $A
 }
 
-echo "== Raccourcis : ² → app Herdr, * → Guake"
+echo "== Extension GNOME (place la console : seul le Shell peut le faire en Wayland)"
+U=console@dotfiles.ch
+link "$D/gnome-shell/$U" ~/.local/share/gnome-shell/extensions/$U
+if ! gnome-extensions enable $U 2>/dev/null; then  # inconnue du Shell avant la reconnexion : par gsettings
+  E=$(gsettings get org.gnome.shell enabled-extensions)
+  if [[ $E != *"'$U'"* ]]; then
+    E=${E#@as }; E=${E%]}  # liste vide : « @as [] »
+    [[ $E == "[" ]] && E="['$U']" || E="$E, '$U']"
+    gsettings set org.gnome.shell enabled-extensions "$E"
+  fi
+fi
+
+echo "== Raccourcis : ² → app Herdr, F12 → Guake"
 K=org.gnome.settings-daemon.plugins.media-keys
 P=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
 shortcut() {  # shortcut <customN> <nom> <commande> <touche>
@@ -85,7 +114,7 @@ shortcut() {  # shortcut <customN> <nom> <commande> <touche>
   [[ $l == "[" ]] && l="['$P/$1/']" || l="$l, '$P/$1/']"
   gsettings set $K custom-keybindings "$l"
 }
-shortcut custom0 guake 'env GDK_BACKEND=x11 guake -t' KP_Multiply  # * du pavé numérique → Guake (transition)
+shortcut custom0 guake 'env GDK_BACKEND=x11 guake -t' F12  # F12 → Guake (transition) : atteignable sans pavé numérique
 shortcut custom1 'app herdr' "$D/bin/console" section  # ² : app Herdr devant sur l'écran de la souris, ou réduite
 # ancien lanceur « Console » (Ghostty) : retiré du dock
 rm -f ~/.local/share/applications/console.desktop
@@ -97,3 +126,5 @@ dconf load /org/guake/ < "$D/guake/guake.dconf"
 gsettings set guake.general default-shell "$(command -v zsh)"  # sinon Guake lance $SHELL de la session, encore bash jusqu'à la reconnexion
 
 echo "OK. Déconnecte-toi puis reconnecte-toi (shell zsh, ~/.local/bin dans le PATH), puis touche ²."
+echo "   Indispensable : GNOME ne charge une extension qu'au démarrage de la session (Wayland), et les"
+echo "   programmes déjà lancés (Guake) gardent en cache la liste des polices d'avant l'installation."

@@ -1,11 +1,12 @@
 // Agents in grouped or priority views; parents take their most urgent sub-agent's place.
 // Kevin : clone of the shipped "agents". Each Claude row: status icon (spinner, check, !), the session's
 // project title colored by status, its last request, then running sub-agents and shells. Title, request
-// and counts come from ~/dotfiles/bin/herdr-app-agents (fed by the Claude Code hooks in ~/dotfiles/bin).
+// and counts come from <repo>/bin/herdr-app-agents (fed by the Claude Code hooks in <repo>/bin), <repo> found
+// through this mod's link (~/.config/herdr-app/mods/claude-agents → <repo>/herdr-app/mods/claude-agents).
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, home, hc } from "herdr";
+import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, appHome, hc } from "herdr";
 
 // Catppuccin Mocha, like the console (herdr TUI) and Ghostty.
 const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#9399b2", title: "#ffffff", idleTitle: "#cdd6f4", desc: "#9399b2", sub: "#cba6f7", shell: "#fab387",
@@ -132,7 +133,9 @@ export default class Agents extends View {
     this.loading = true;
     cx.spawn(async (cx) => {
       try {
-        const r = await exec(`${home()}/dotfiles/bin/herdr-app-agents`, []);
+        // The repo may be cloned as dotfiles, Dotfiles…: follow this mod's link once.
+        this.repo ??= (await exec("readlink", ["-f", `${appHome()}/mods/claude-agents`])).stdout.trim().replace(/\/herdr-app\/mods\/claude-agents$/, "");
+        const r = await exec(`${this.repo}/bin/herdr-app-agents`, []);
         if (r.code === 0) this.info = JSON.parse(r.stdout);
       } catch {}
       this.loading = false;

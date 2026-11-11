@@ -10,3 +10,6 @@ keybind = ctrl+shift+t=unbind
 keybind = ctrl+shift+n=unbind
 keybind = ctrl+shift+o=unbind
 keybind = ctrl+shift+e=unbind
+# Clic molette : herdr capture la souris, donc shift+clic molette colle la sélection (Ghostty garde
+# shift+clic pour lui quand les programmes ne voient pas shift). L'ancien bin/middle-paste était X11.
+mouse-shift-capture = false

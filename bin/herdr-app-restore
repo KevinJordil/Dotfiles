@@ -12,5 +12,8 @@ for f in "$D"/hc-*.sid; do
   pgrep -f -- "--resume $sid" >/dev/null && continue  # déjà ouverte quelque part
   jq -e --arg t "$t" 'any(.terminals[]; .address == $t)' <<<"$live" >/dev/null || { rm -f "$f"; continue; }  # terminal fermé
   agent=$(jq -r --arg t "$t" '.terminals[] | select(.address == $t and .state == "live") | .agent // ""' <<<"$live")
-  case $agent in zsh | bash | sh) hc send "$t" "claude --resume $sid" >/dev/null && echo "repris : $t" ;; esac
+  case $agent in zsh | bash | sh)
+    # juste après le démarrage du serveur, le terminal est encore « lost, waiting for its new shell » : on réessaie
+    for _ in {1..30}; do hc send "$t" " claude --resume $sid" >/dev/null 2>&1 && { echo "repris : $t"; break; }; sleep 2; done ;;  # espace en tête : hors historique (HIST_IGNORE_SPACE)
+  esac
 done

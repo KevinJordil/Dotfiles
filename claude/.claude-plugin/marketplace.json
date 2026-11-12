@@ -1,0 +1,5 @@
+{
+  "name": "dotfiles",
+  "owner": { "name": "KevinJordil" },
+  "plugins": [{ "name": "chat-bubbles", "source": "./plugins/chat-bubbles", "description": "Conversation lisible : bulle « Toi », en-tête ✦ Assistant, fin de tour sur une ligne" }]
+}

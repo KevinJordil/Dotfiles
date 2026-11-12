@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Relance les sessions Claude de l'app Herdr (herdr-core) pour qu'elles prennent des réglages changés (style de
+# réponse, vue focus, plugins) : /exit puis « claude --resume <session> » dans le même terminal, la conversation
+# est gardée. Une session qui travaille, attend une réponse, a du texte dans sa saisie ou des tâches en
+# arrière-plan (shells, son /exit demanderait de les arrêter) n'est jamais coupée : elle est attendue, 2 h au plus.
+#   claude-refresh [terminal...]   (défaut : toutes)
+screen() { hc read "$1" 2>/dev/null | sed 's/\xc2\xa0/ /g' | grep -v '^\s*$' | tail -4; }
+state() { hc get "$1" --json 2>/dev/null | jq -r '.status.state // empty'; }
+pid_of() {  # le claude que herdr-core a lancé dans ce terminal
+  local p
+  for p in $(pgrep -x claude); do
+    tr '\0' '\n' </proc/"$p"/environ 2>/dev/null | grep -qx "HC_TERMINAL_ID=$1" && { echo "$p"; return; }
+  done
+}
+shell_back() { [[ $(hc get "$1" --json 2>/dev/null | jq -r '.foreground.name // empty') =~ ^(zsh|bash|sh)$ ]]; }
+
+if (( $# )); then todo=("$@"); else
+  todo=(); for p in $(pgrep -x claude); do
+    t=$(tr '\0' '\n' </proc/"$p"/environ 2>/dev/null | sed -n 's/^HC_TERMINAL_ID=//p'); [[ $t ]] && todo+=("$t")
+  done
+fi
+end=$((SECONDS + 7200))
+while (( ${#todo[@]} && SECONDS < end )); do
+  left=()
+  for t in "${todo[@]}"; do
+    pid=$(pid_of "$t"); [[ $pid ]] || { echo "$t : plus de Claude, ignoré"; continue; }
+    # au repos, saisie vide et aucune tâche de fond, sinon on repasse plus tard
+    [[ $(state "$t") =~ ^(idle|done)$ ]] && screen "$t" | grep -qx '❯ *' && (( $(pgrep -c -P "$pid" -f shell-snapshots) == 0 )) &&
+      ! screen "$t" | grep -q ' shell' || { left+=("$t"); continue; }
+    sid=$(jq -r '.sessionId // empty' ~/.claude/sessions/"$pid".json 2>/dev/null)
+    [[ $sid ]] || { echo "$t : session inconnue, ignoré"; continue; }
+    hc keys "$t" / e x i t >/dev/null; sleep 1
+    # la saisie ne contient que /exit (personne n'a tapé entre-temps), sinon on efface et on attend
+    screen "$t" | grep -qx '❯ /exit *' || { hc keys "$t" ctrl+u >/dev/null; left+=("$t"); continue; }
+    hc keys "$t" enter >/dev/null
+    for _ in {1..40}; do shell_back "$t" && break
+      # une question avant de quitter (tâches à arrêter…) : on reste, Esc, et on réessaiera plus tard
+      screen "$t" | grep -q 'Enter to confirm' && { hc keys "$t" esc >/dev/null; break; }
+      sleep 0.5; done
+    shell_back "$t" || { left+=("$t"); continue; }
+    # espace en tête : hors historique ; sans HC_TERMINAL_ID, hc tape la commande telle quelle
+    env -u HC_TERMINAL_ID hc send "$t" " claude --resume $sid" >/dev/null && echo "$t : relancée ($sid)"
+  done
+  todo=("${left[@]}")
+  (( ${#todo[@]} )) && sleep 10
+done
+(( ${#todo[@]} )) && echo "non relancées après 2 h : ${todo[*]}"

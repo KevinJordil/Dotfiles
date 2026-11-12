@@ -39,6 +39,8 @@ Fonctionne en **Wayland comme en X11** : c'est l'extension GNOME `gnome-shell/co
 | `guake/guake.dconf` | réglages Guake (transition) : un seul onglet, plein écran, mêmes couleurs, touche `*` | chargé avec `dconf load` |
 | `zsh/herdr.zsh` | lance herdr dans Guake (Ghostty le lance directement), historique par onglet principal, nom auto des sous-onglets (`dossier·programme`), fonction `nom` | sourcé en tête de `zsh/zshrc` |
 | `zsh/claude.zsh` | fonction `claude` : demande l'organisation (`bin/claude-org pick`) puis lance Claude avec son jeton | sourcé par `zsh/zshrc` |
+| `claude/output-styles/clair-et-resume.md` | style de réponse de Claude Code : résumé en gras, détail rangé sous des titres et en tableaux, prochaine action | `~/.claude/output-styles` (lien), activé par `install.sh` (`outputStyle`) |
+| `claude/plugins/chat-bubbles` | mod Claude Code : tes messages sur fond `#2E3442` sous « Toi », réponses sous « ✦ Assistant », résumé des outils masqué une fois le tour fini, fin de tour « ✓ Terminé en … · heure · ctrl+o : détail » | marketplace `dotfiles` (`claude/.claude-plugin`), installé par `install.sh` ; `/reload-plugins` après une modification |
 | `zsh/zshrc` | zsh générique : Oh My Zsh, Starship, plugins git/zsh-autosuggestions/docker ; source `~/.zshrc.local` | `~/.zshrc` (lien) |
 | `zsh/starship.toml` | prompt Starship (mise en page p10k lean, Catppuccin, git détaillé, Docker ; partie droite sur la ligne de saisie : pas de prompt répété au resize d'un split) | via `STARSHIP_CONFIG` |
 | `fonts/` | Roboto Mono (police de Guake), MesloLGS NF (icônes du prompt) | `~/.local/share/fonts` (copie) |

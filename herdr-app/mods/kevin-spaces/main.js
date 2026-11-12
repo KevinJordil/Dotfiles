@@ -28,6 +28,8 @@ function place(s, ps) {
 }
 const rowHeight = () => 46;
 const RAIL_CELL = 32;
+// One look with claude-agents: main and secondary text, 22 px squares, medium names.
+const TEXT = "#D4D4D4", SUBTLE = "#A8ADB5";
 const railCell = (el) => h_flex().flex_none().justify_center().child(el);
 const where = (s, ps) => JSON.stringify([s.machine ?? null, place(s, ps)]);
 const base = (path) => path.replace(/\/+$/, "").split("/").pop();
@@ -379,7 +381,7 @@ export default class Spaces extends View {
       .justify_end()
       .items_center()
       .text_size(11.5)
-      .text_color(t.dim)
+      .text_color(SUBTLE)
       .when(Boolean(where), (el) => el.child(div().min_w(0).truncate().child(where)))
       .when(g.ahead > 0, (el) => el.child(div().flex_none().text_color(t.ansi2).child(`\u2191${g.ahead}`)))
       .when(g.behind > 0, (el) => el.child(div().flex_none().text_color(t.ansi1).child(`\u2193${g.behind}`)));
@@ -393,7 +395,7 @@ export default class Spaces extends View {
     const modTabs = new Set(panes().filter((p) => p.mod).map((p) => p.tab));
     const tools = w.tabs.filter((tb) => modTabs.has(tb.id));
     const count = (k, text, color) => k > 0 && div().flex_none().text_color(color).child(text);
-    return h_flex().pl(27).gap(8).items_center().text_size(11.5).text_color(t.dim)
+    return h_flex().pl(31).gap(8).items_center().text_size(11.5).text_color(SUBTLE)
       .child(div().flex_none().child(plural(w.tabs.length, "tab") + (ag.length ? ` · ${plural(ag.length, "agent")}` : "")))
       .children([
         count(n("blocked"), `! ${plural(n("blocked"), "bloqué")}`, "#f38ba8"),
@@ -461,8 +463,8 @@ export default class Spaces extends View {
           .gap(9)
           .items_center()
           .when(Boolean(tree), el => el.pl(22).child(svg("mods/workspace-chrome/branch.svg").size(13).text_color(t.dim)))
-          .when(!tree, el => el.child(h_flex().size(18).flex_none().rounded(5).bg(fill).items_center().justify_center().text_size(11.5).font_bold().text_color("#ffffff").child([...w.name][0]?.toUpperCase() ?? "?")))
-          .child(div().flex_shrink(0).max_w(150).truncate().text_color(t.foreground).child(w.name))
+          .when(!tree, el => el.child(h_flex().size(22).flex_none().rounded(6).bg(fill).items_center().justify_center().text_size(12).font_bold().text_color("#ffffff").child([...w.name][0]?.toUpperCase() ?? "?")))
+          .child(div().flex_shrink(0).max_w(150).truncate().font_medium().text_color(TEXT).child(w.name))
           .child(g ? this.gitTail(g, tree, w.name, t) : div().flex_1()),
       )
       .child(this.summary(w, t));
@@ -500,7 +502,7 @@ export default class Spaces extends View {
     }
     if (changed) setShared("space.colors", kept);
     return v_flex().size_full().min_h(0).bg(t.chrome).text_size(13)
-      .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).text_color(t.dim)
+      .child(h_flex().h(31).pl(16).pr(10).items_center().justify_between().text_size(11.5).font_medium().text_color(t.dim)
         .when(collapsed, el => el.pl(0).pr(0).justify_center())
         .when(!collapsed, el => el.child("Spaces"))
         .child(div().id("space-new").size(26).flex_none().flex().items_center().justify_center().rounded(6).hover(s => s.bg(t.hover).text_color(t.foreground))

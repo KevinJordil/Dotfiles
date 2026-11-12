@@ -9,7 +9,7 @@ import { v_flex, h_flex } from "gpui-base";
 import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, appHome, hc } from "herdr";
 
 // Catppuccin Mocha, like the console (herdr TUI) and Ghostty.
-const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#9399b2", title: "#ffffff", idleTitle: "#cdd6f4", desc: "#9399b2", sub: "#cba6f7", shell: "#fab387",
+const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#9399b2", title: "#D4D4D4", idleTitle: "#D4D4D4", desc: "#A8ADB5", sub: "#cba6f7", shell: "#fab387",
   cardHover: "#ffffff0a", selected: "#2f2840", selectedBorder: "#cba6f7" };
 const LABEL = { working: "En cours", done: "Fini", blocked: "Bloqué" };
 // The spaces' avatar colors (kevin-spaces / spaces: shared "space.colors"), so an agent shows its space.
@@ -456,11 +456,10 @@ export default class Agents extends View {
         .id(`ag-${a.address}`)
         .mb(1)
         .relative()
-        .pl(6)
-        .pr(8)
+        .px(8)
         .py(5)
         .flex_none()
-        .rounded(10)
+        .rounded(8)
         .items_center()
         .gap(9)
                 // Selected: the same quiet grey as the selected space, no colored frame.
@@ -478,7 +477,7 @@ export default class Agents extends View {
         .child(this.bigStatus(a))
         .child(v_flex().flex_1().min_w(0).gap(1)
           .child(h_flex().gap(6).items_center().min_h(16)
-            .child(div().flex_1().min_w(0).truncate().text_size(13).font_semibold().text_color(a.status === "idle" ? C.idleTitle : C.title).child(info.title || name))
+            .child(div().flex_1().min_w(0).truncate().text_size(13).font_medium().text_color(a.status === "idle" ? C.idleTitle : C.title).child(info.title || name))
             .when(Boolean(machine), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(machine)))
             .when(subs.length > 0, (el) => el.child(fold(a, subs)))
             .when(Boolean(side), (el) => el.child(side)))

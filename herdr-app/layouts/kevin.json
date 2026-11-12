@@ -87,12 +87,16 @@
                   },
                   "focus": {
                     "width": 1,
-                    "color": "accent"
+                    "color": "border"
                   },
                   "radius": 10,
                   "gap": 8,
                   "lone": true
                 }
+              },
+              "colors": {
+                "background": "#1E1E1E",
+                "foreground": "#D4D4D4"
               }
             },
             {
@@ -153,7 +157,7 @@
     12,
     16
   ],
-  "font": "Ubuntu Sans Mono",
+  "font": "Geist Mono",
   "font_size": 13,
   "ui_font": "Inter"
 }

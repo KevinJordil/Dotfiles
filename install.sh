@@ -10,7 +10,6 @@ missing=()
 for p in zsh guake jq curl git; do command -v $p >/dev/null || missing+=($p); done
 command -v dconf >/dev/null || missing+=(dconf-cli)  # réglages Guake
 python3 -c "import gi; gi.require_version('Wnck', '3.0')" 2>/dev/null || missing+=(gir1.2-wnck-3.0)  # bin/console : repli X11 sans l'extension
-[[ $(fc-list "Ubuntu Sans Mono") ]] || missing+=(fonts-ubuntu)  # police des terminaux de l'app Herdr (pas de grep -q : avec pipefail, SIGPIPE fait échouer le test)
 command -v notify-send >/dev/null || missing+=(libnotify-bin)  # bin/console : erreurs visibles depuis un raccourci
 python3 -c 'import gi; from gi.repository import Gio' 2>/dev/null || missing+=(python3-gi)  # bin/console (D-Bus)
 # Pas dans les dépôts Ubuntu : PPA communautaire de Mike Kasberg (cité par ghostty.org). Il ne publie
@@ -49,6 +48,16 @@ if command -v claude >/dev/null; then
   # app Herdr : session Claude de chaque terminal retenue (bin/agent-session), reprise à l'ouverture de session
   grep -q agent-session $S || { jq --arg c "$D/bin/agent-session" '.hooks.SessionStart += [{hooks: [{type: "command", command: "\($c) start"}]}]
     | .hooks.SessionEnd += [{hooks: [{type: "command", command: "\($c) end"}]}]' $S >$S.tmp && mv $S.tmp $S; }
+  # affichage : plein écran, vue focus (tour replié en une ligne + message final, Ctrl+O pour le détail),
+  # réponses au style « Clair et résumé » (claude/output-styles, lié plus bas)
+  # (le style remplace le plugin i-have-adhd, désactivé, et son interrupteur « toujours actif »)
+  jq '.tui = "fullscreen" | .viewMode = "focus" | .outputStyle = "Clair et résumé"
+    | .enabledPlugins["i-have-adhd@i-have-adhd"] = false' $S >$S.tmp && mv $S.tmp $S
+  rm -f ~/.claude/.i-have-adhd-always
+  # mod chat-bubbles (claude/plugins) : bulle « Toi », en-tête ✦ Assistant, fin de tour sur une ligne ; lu depuis le
+  # repo même, une modification s'applique avec /reload-plugins
+  claude plugin marketplace list 2>/dev/null | grep -q dotfiles || claude plugin marketplace add "$D/claude"
+  claude plugin list 2>/dev/null | grep -q chat-bubbles@dotfiles || claude plugin install chat-bubbles@dotfiles --scope user
   mkdir -p ~/.config/autostart
   printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Herdr : reprise des agents Claude' \
     "Exec=$D/bin/herdr-app-restore" 'X-GNOME-Autostart-enabled=true' 'NoDisplay=true' >~/.config/autostart/herdr-app-restore.desktop
@@ -75,6 +84,7 @@ link() {
 link "$D/herdr/config.toml" ~/.config/herdr/config.toml
 link "$D/ghostty/config" ~/.config/ghostty/config
 link "$D/zsh/zshrc" ~/.zshrc  # réglages propres au PC : ~/.zshrc.local (hors repo)
+link "$D/claude/output-styles/clair-et-resume.md" ~/.claude/output-styles/clair-et-resume.md
 
 echo "== App Herdr (herdr-core) : sidebar des agents, barre d'état (Nettoyer), atelier firmware"
 command -v herdr-app >/dev/null || [[ -x ~/.local/bin/herdr-app ]] || curl -fsSL https://releases.herdr.dev/app/install.sh | sh

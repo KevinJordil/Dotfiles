@@ -1,0 +1,1 @@
+{ "name": "chat-bubbles", "version": "0.1.0", "description": "Conversation lisible : tes messages sur fond bleu nuit sous « Toi », les réponses sous « ✦ Assistant », le résumé des outils masqué une fois le tour fini, la fin de tour sur une ligne (durée, heure, ctrl+o)", "author": { "name": "KevinJordil" } }

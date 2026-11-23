@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, ScrollHandle } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, exec, appHome, props, closeOverlay, nextCommand, setShared, focused } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, exec, appHome, props, closeOverlay, nextCommand, setShared, focused, home, readTextFile } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -39,10 +39,47 @@ export default class Tabs extends View {
     if (!props()?.account) cx.timer.every(60000, (cx) => this.refreshUsage(cx));
     this.pressed = null;
     this.hoverTab = null;
+    this.chatMade = new Set(); // tabs given a Discussion pane in this run (one closed by hand stays closed)
+    this.gui = {}; // terminal → its Claude runs the Discussion's bridge (claude/gui), not the console
+    cx.timer.every(1500, (cx) => this.checkGui(cx));
     this.scroll = ScrollHandle.new();
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
     // kevin-tabs.account (a key, herdr-app do): the account menu, as a click on the widget opens it.
-    if (!props()?.account) cx.spawn(async (cx) => { for (;;) { if (await nextCommand() === "account" && this.usage) this.openAccount(); cx.notify(); } });
+    // kevin-tabs.reload-chats: every open Discussion recreated, so it runs claude-chat's latest code (a pane
+    // mod only reloads when its pane is new); the bridge and the conversation are untouched.
+    if (!props()?.account) cx.spawn(async (cx) => { for (;;) {
+      const c = await nextCommand();
+      if (c === "account" && this.usage) this.openAccount();
+      if (c === "reload-chats") this.reloadChats();
+      cx.notify();
+    } });
+  }
+
+  reloadChats() {
+    const all = panes();
+    for (const chat of all.filter(p => p.mod === "claude-chat")) {
+      const claude = all.find(p => p.tab === chat.tab && p.terminal && this.gui[p.terminal]);
+      if (!claude) continue;
+      run("pane.split", { direction: "right", pane: claude.pane, mod: "claude-chat", props: { terminal: claude.terminal } });
+      run("pane.close", { pane: chat.pane });
+    }
+  }
+
+  // Which Claude terminals run the bridge: its state file names a live process (`claude --tui` writes none).
+  checkGui(cx) {
+    const ts = [...new Set(panes().filter(p => p.terminal && p.app === "claude-code").map(p => p.terminal))];
+    cx.spawn(async (cx) => {
+      let changed = false;
+      for (const t of ts) {
+        let alive = false;
+        try {
+          const st = JSON.parse((await readTextFile(`${home()}/.cache/claude-gui/${t}/state.json`)) ?? "null");
+          alive = Boolean(st) && (await exec("kill", ["-0", String(st.pid)])).code === 0;
+        } catch {}
+        if (this.gui[t] !== alive) { this.gui[t] = alive; changed = true; }
+      }
+      if (changed) cx.notify();
+    });
   }
 
   refreshUsage(cx) {
@@ -169,6 +206,22 @@ export default class Tabs extends View {
       this.selectedIndex = active;
       if (active >= 0) this.scroll.scroll_to_item(active);
     }
+    // Every Claude tab shows its Discussion (claude-chat) in place of its terminal, or the terminal when the
+    // person chose it for that tab (shared "chat.view", also set by the Discussion's "Répondre →"); the switch
+    // zooms one or the other once per choice, so a tab unzoomed by hand stays as it is.
+    const tab = shown[active], views = shared("chat.view") ?? {};
+    const inTab = tab ? panes().filter(p => p.tab === tab.id) : [];
+    const claude = inTab.find(p => p.terminal && p.app === "claude-code" && this.gui[p.terminal]);
+    const chat = inTab.find(p => p.mod === "claude-chat");
+    const want = views[tab?.id] === "terminal" ? claude : chat;
+    if (tab && !claude) this.chatMade.delete(tab.id); // Claude ended: the next one gets its Discussion again
+    if (claude && !chat && views[tab.id] !== "terminal" && !this.chatMade.has(tab.id)) {
+      this.chatMade.add(tab.id);
+      run("pane.split", { direction: "right", pane: claude.pane, mod: "claude-chat", props: { terminal: claude.terminal } });
+    } else if (claude && want && !want.zoomed && this.chatZoom !== `${tab.id}:${want.pane}`) {
+      this.chatZoom = `${tab.id}:${want.pane}`;
+      run("pane.zoom", { pane: want.pane });
+    }
     const stop = (_e, cx) => cx.stop_propagation();
     const button = (id, label, action) => div().id(id).size(26).flex_none().flex().items_center().justify_center().rounded(6).text_color(t.dim).hover(s => s.bg(t.hover).text_color(t.foreground))
       .on_mouse_down("left", stop).on_click(action).child(label);
@@ -205,7 +258,8 @@ export default class Tabs extends View {
       ? Math.max(10, (root.traffic_lights[0] + 64) / settings().zoom - (sidebar?.hidden ? 0 : sidebar?.size?.px ?? 0))
       : 10;
     const panel = find(root, "panel"), body = find(root, "panel-body");
-    const enabled = (shared("workspace.panels") ?? ["files", "changes"]).filter(id => id !== "files");
+    // The side panels: Changes, and Over9k's Timeline (prompt by prompt); Files is gone.
+    const enabled = [...(shared("workspace.panels") ?? ["files", "changes"]).filter(id => id !== "files"), "timeline"];
     this.syncPanel(space, panel, body, enabled);
     const panelButton = (id, label, icon) => {
       const on = panel && !panel.hidden && body?.active === id;
@@ -223,9 +277,14 @@ export default class Tabs extends View {
       .child(h_flex().id("tab-scroll").flex_1().min_w(0).h_full().items_center().gap(3).overflow_x_scrollbar().track_scroll(this.scroll)
         .on_size_change((_size, cx) => { if (active >= 0) { this.scroll.scroll_to_item(active); cx.notify(); } })
         .children(shown.map(item)))
+      .when(Boolean(claude && chat), el => el.child(h_flex().id("chat-view").h(26).px(9).gap(5).flex_none().items_center().rounded(6)
+        .text_size(12).text_color(t.muted).hover(s => s.bg(t.hover).text_color(t.foreground)).on_mouse_down("left", stop)
+        .on_click(() => setShared("chat.view", { ...views, [tab.id]: want === chat ? "terminal" : "chat" }))
+        .child(want === chat ? "Terminal" : "Discussion")))
       .child(button("tab-new", "+", () => openOverlay({ mod: "new-menu", kind: "popup", width: 250, height: 512 })))
       .when(Boolean(this.usage), el => el.child(this.usageView(t)))
       .when(enabled.includes("changes"), el => el.child(panelButton("changes", "Changes", "mods/changes/changes.svg")))
+      .child(panelButton("timeline", "Timeline", "mods/over9k-prompts/timeline.svg"))
       .when(w?.buttons, el => el.child(button("minimize", w.platform === "windows" ? svg("mods/kevin-tabs/win-min.svg").size(16) : "−", () => run("window.minimize")))
         .child(button("maximize", w.platform === "windows" ? svg(`mods/kevin-tabs/${w.maximized ? "win-restore" : "win-max"}.svg`).size(16) : "□", () => run("window.maximize")))
         .child(button("close-window", w.platform === "windows" ? svg("mods/kevin-tabs/win-close.svg").size(16) : svg("mods/pane/close.svg").size(13), () => run("window.close"))));

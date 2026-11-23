@@ -13,7 +13,7 @@ stale() { [[ ! -e $1 || $(find "$1" -mmin +5) ]]; }
 # Le claude de ce terminal a-t-il reçu le jeton d'une autre organisation (CLAUDE_CODE_OAUTH_TOKEN) ?
 org= tok=
 if [[ ${1:-} ]]; then
-  for pid in $(pgrep -x claude); do
+  for pid in $(pgrep -x 'claude(\.exe)?'); do
     e=$(tr '\0' '\n' </proc/"$pid"/environ 2>/dev/null) || continue
     grep -qx "HC_TERMINAL_ID=$1" <<<"$e" || continue
     tok=$(sed -n 's/^CLAUDE_CODE_OAUTH_TOKEN=//p' <<<"$e"); break

@@ -2,12 +2,15 @@
 # Pour le mod claude-agents de l'app Herdr : {terminal: {title, last, shells, subagents}} de chaque Claude lancé
 # par herdr-core (variable HC_TERMINAL_ID). Titre et dernière demande écrits par bin/agent-summary,
 # sous-agents par bin/agent-subagents, shells = tâches Bash encore ouvertes (comme bin/herdr-agents).
+# Session en Discussion (claude/gui/bridge.mjs) : les deux comptes viennent de la liste des tâches de fond de
+# Claude Code elle-même (state.json, bg), plus juste que les hooks (un arrêt manqué) et les processus.
 D=~/.cache/herdr-agents
-for pid in $(pgrep -x claude); do
+for pid in $(pgrep -x 'claude(\.exe)?'); do
   t=$(tr '\0' '\n' </proc/"$pid"/environ 2>/dev/null | sed -n 's/^HC_TERMINAL_ID=//p')
   [[ $t ]] || continue
+  bg=$(jq -c '.bg // empty' ~/.cache/claude-gui/"$t"/state.json 2>/dev/null)
+  [[ $bg ]] || bg=$(jq -n --argjson s "$(pgrep -c -P "$pid" -f shell-snapshots)" \
+    --argjson a "$(find "$D/hc-$t.sub" -type f -mmin -120 2>/dev/null | wc -l)" '{agents: $a, shells: $s}')
   jq -n --arg t "$t" --arg title "$(cat "$D/hc-$t.title" 2>/dev/null)" --arg last "$(cat "$D/hc-$t.last" 2>/dev/null)" \
-    --argjson shells "$(pgrep -c -P "$pid" -f shell-snapshots)" \
-    --argjson subagents "$(find "$D/hc-$t.sub" -type f -mmin -120 2>/dev/null | wc -l)" \
-    '{($t): {title: $title, last: $last, shells: $shells, subagents: $subagents}}'
+    --argjson bg "$bg" '{($t): {title: $title, last: $last, shells: $bg.shells, subagents: $bg.agents}}'
 done | jq -s 'add // {}'

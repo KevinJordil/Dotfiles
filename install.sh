@@ -11,6 +11,7 @@ for p in zsh guake jq curl git; do command -v $p >/dev/null || missing+=($p); do
 command -v dconf >/dev/null || missing+=(dconf-cli)  # réglages Guake
 python3 -c "import gi; gi.require_version('Wnck', '3.0')" 2>/dev/null || missing+=(gir1.2-wnck-3.0)  # bin/console : repli X11 sans l'extension
 command -v notify-send >/dev/null || missing+=(libnotify-bin)  # bin/console : erreurs visibles depuis un raccourci
+command -v xclip >/dev/null || missing+=(xclip)  # Discussion Claude (mod claude-chat) : image collée avec Ctrl+V
 python3 -c 'import gi; from gi.repository import Gio' 2>/dev/null || missing+=(python3-gi)  # bin/console (D-Bus)
 # Pas dans les dépôts Ubuntu : PPA communautaire de Mike Kasberg (cité par ghostty.org). Il ne publie
 # rien pour les versions trop anciennes (22.04 : GTK 4.6 < 4.14 exigé par Ghostty) et un PPA sans build
@@ -51,13 +52,16 @@ if command -v claude >/dev/null; then
   # affichage : plein écran, vue focus (tour replié en une ligne + message final, Ctrl+O pour le détail),
   # réponses au style « Clair et résumé » (claude/output-styles, lié plus bas)
   # (le style remplace le plugin i-have-adhd, désactivé, et son interrupteur « toujours actif »)
-  jq '.tui = "fullscreen" | .viewMode = "focus" | .outputStyle = "Clair et résumé"
+  # chaque session démarre en mode auto (console comme Discussion ; Maj+Tab pour en changer)
+  jq '.tui = "fullscreen" | .viewMode = "focus" | .outputStyle = "Clair et résumé" | .permissions.defaultMode = "auto"
     | .enabledPlugins["i-have-adhd@i-have-adhd"] = false' $S >$S.tmp && mv $S.tmp $S
   rm -f ~/.claude/.i-have-adhd-always
   # mod chat-bubbles (claude/plugins) : bulle « Toi », en-tête ✦ Assistant, fin de tour sur une ligne ; lu depuis le
   # repo même, une modification s'applique avec /reload-plugins
   claude plugin marketplace list 2>/dev/null | grep -q dotfiles || claude plugin marketplace add "$D/claude"
   claude plugin list 2>/dev/null | grep -q chat-bubbles@dotfiles || claude plugin install chat-bubbles@dotfiles --scope user
+  # vue Discussion de l'app Herdr (claude/gui/bridge.mjs) : le SDK Agent officiel, dans claude/gui/node_modules
+  npm install --silent --prefix "$D/claude/gui"
   mkdir -p ~/.config/autostart
   printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Herdr : reprise des agents Claude' \
     "Exec=$D/bin/herdr-app-restore" 'X-GNOME-Autostart-enabled=true' 'NoDisplay=true' >~/.config/autostart/herdr-app-restore.desktop
@@ -98,6 +102,28 @@ herdr-app do layout.switch --name kevin >/dev/null 2>&1 || {
   A=~/.config/herdr-app/shared.json; [[ -f $A ]] || echo '{}' >$A
   jq '.layout = "kevin"' $A >$A.tmp && mv $A.tmp $A
 }
+
+echo "== Mods tiers de l'app Herdr : Redline (revue des merge requests GitLab, Ctrl+Maj+G) et glab"
+# glab, l'outil GitLab officiel dont Redline se sert : version fixée, somme de contrôle vérifiée
+if ! command -v glab >/dev/null; then
+  v=1.130.0 tmp=$(mktemp -d) u=https://gitlab.com/gitlab-org/cli/-/releases/v1.130.0/downloads
+  curl -fsSL -o "$tmp/glab.tgz" "$u/glab_${v}_linux_amd64.tar.gz" && curl -fsSL -o "$tmp/sums" "$u/checksums.txt" &&
+    [[ $(sha256sum "$tmp/glab.tgz" | cut -d' ' -f1) == $(grep " glab_${v}_linux_amd64.tar.gz$" "$tmp/sums" | cut -d' ' -f1) ]] &&
+    tar -xzf "$tmp/glab.tgz" -C "$tmp" && install -m 755 "$tmp/bin/glab" ~/.local/bin/glab || echo "   glab non installé"
+  rm -rf "$tmp"
+  echo "   à faire une fois : glab auth login --hostname ci.sdnroot.net"
+fi
+# Redline n'a pas de licence : pas copié dans ce repo, mais pris à son dépôt, à un commit relu
+if [[ ! -d ~/.config/herdr-app/mods/redline ]]; then
+  tmp=$(mktemp -d)
+  git clone -q https://github.com/iampedii/herdr-redline "$tmp/r" && git -C "$tmp/r" checkout -q cac2ee1bacdcfb9a7c6bcf9e05f09b8196c55f55 &&
+    cp -r "$tmp/r/mods/redline" ~/.config/herdr-app/mods/redline || echo "   Redline non installé"
+  rm -rf "$tmp"
+fi
+K=~/.config/herdr-app/keys.json  # Ctrl+Maj+F, son raccourci d'origine, sert déjà à chercher dans un terminal
+[[ -f $K ]] && jq -e '.global["ctrl-shift-g"]' $K >/dev/null || { [[ -f $K ]] || echo '{}' >$K; jq '.global["ctrl-shift-g"] = "mod.open:redline"' $K >$K.tmp && mv $K.tmp $K; }
+# Ctrl+Maj+M : marque « non lu » sur l'agent affiché (mod claude-agents)
+jq -e '.global["ctrl-shift-m"]' $K >/dev/null || { jq '.global["ctrl-shift-m"] = "claude-agents.toggle"' $K >$K.tmp && mv $K.tmp $K; }
 
 echo "== Extension GNOME (place la console : seul le Shell peut le faire en Wayland)"
 U=console@dotfiles.ch

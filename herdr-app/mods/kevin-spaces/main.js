@@ -392,7 +392,7 @@ export default class Spaces extends View {
     const ag = agents().filter((a) => a.space === w.id);
     const n = (s) => ag.filter((a) => a.status === s).length;
     const plural = (k, word) => `${k} ${word}${k > 1 ? "s" : ""}`;
-    const modTabs = new Set(panes().filter((p) => p.mod).map((p) => p.tab));
+    const modTabs = new Set(panes().filter((p) => p.mod && p.mod !== "claude-chat").map((p) => p.tab));  // a Discussion is no tool
     const tools = w.tabs.filter((tb) => modTabs.has(tb.id));
     const count = (k, text, color) => k > 0 && div().flex_none().text_color(color).child(text);
     return h_flex().pl(31).gap(8).items_center().text_size(11.5).text_color(SUBTLE)

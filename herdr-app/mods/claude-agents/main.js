@@ -6,10 +6,10 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, appHome, hc } from "herdr";
+import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, exec, appHome, hc, home, readTextFile, writeTextFile, nextCommand, notify } from "herdr";
 
 // Catppuccin Mocha, like the console (herdr TUI) and Ghostty.
-const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#9399b2", title: "#D4D4D4", idleTitle: "#D4D4D4", desc: "#A8ADB5", sub: "#cba6f7", shell: "#fab387",
+const C = { working: "#fab387", done: "#a6e3a1", blocked: "#f38ba8", idle: "#9399b2", title: "#D4D4D4", idleTitle: "#D4D4D4", desc: "#A8ADB5", sub: "#cba6f7", shell: "#9399b2",
   cardHover: "#ffffff0a", selected: "#2f2840", selectedBorder: "#cba6f7" };
 const LABEL = { working: "En cours", done: "Fini", blocked: "Bloqué" };
 // The spaces' avatar colors (kevin-spaces / spaces: shared "space.colors"), so an agent shows its space.
@@ -84,6 +84,11 @@ function duration(ms) {
 }
 
 // The agent's icon from the app's program table: a one-color glyph or a picture.
+// Unread mark (from sachin-philip/herdr-marks-as-unread, MIT): the label herdr.mark=unread on the agent's terminal,
+// so it survives restarts and shows in every Herdr client. Display only: status, sorting and Fini are untouched.
+const MARK_LABEL = "herdr.mark";
+const marksOf = (all) => new Set(all.filter((t) => t.state === "live" && t.labels?.[MARK_LABEL]).map((t) => t.address));
+
 function icon(p, size, color) {
   if (!p?.icon) return null;
   return p.tint ? svg(p.icon).size(size).flex_none().text_color(color) : image(p.icon).w(size).h(size).flex_none();
@@ -104,9 +109,51 @@ export default class Agents extends View {
     this.stopping = new Set();
     this.refreshInfo(cx);
     cx.timer.every(2000, (cx) => this.refreshInfo(cx));
+    // Marks: the tab shown at the last render (undefined before the first) and the label writes in flight.
+    this.prevTab = undefined;
+    this.markWrites = new Set();
+    cx.spawn(async (cx) => {
+      for (;;) {
+        if ((await nextCommand()) === "toggle") this.toggleMark();
+        cx.notify();
+      }
+    });
   }
 
-  // Stops a Claude session cleanly: /exit (its SessionEnd hook forgets it for the restore after reboot),
+  setMark(address, on) {
+    if (this.markWrites.has(address)) return;
+    this.markWrites.add(address);
+    hc(["label", address, `${MARK_LABEL}=${on ? "unread" : ""}`])
+      .then((r) => { if (r.code !== 0) notify({ title: "Marque non lu impossible", body: r.stderr.trim(), level: "error" }); })
+      .catch((e) => notify({ title: "Marque non lu impossible", body: String(e), level: "error" }))
+      .finally(() => this.markWrites.delete(address));
+  }
+
+  // The key (ctrl-shift-m): the agent in view, its terminal or its Discussion.
+  toggleMark() {
+    const f = focused();
+    const a = agents().find((x) => x.address === f?.agent) ?? agents().find((x) => x.tab === f?.tab);
+    if (!a) return notify({ title: "Aucun agent à marquer", body: "Affiche un agent puis refais le raccourci.", level: "warning", timeout: 3000 });
+    this.setMark(a.address, !marksOf(terminals()).has(a.address));
+  }
+
+  // Coming back to a marked agent clears it. The Discussion pane is focused rather than the terminal, so
+  // "coming back" is its tab becoming the focused one; marking the one in view keeps it until you leave.
+  clearOnArrival(list, marks) {
+    const tab = focused()?.tab ?? null;
+    if (this.prevTab !== undefined && tab && tab !== this.prevTab)
+      for (const a of list) if (a.tab === tab && marks.has(a.address)) this.setMark(a.address, false);
+    this.prevTab = tab;
+  }
+
+  // Shows an agent: its Discussion when its tab has one (and shows it), else its terminal.
+  show(a) {
+    const chat = panes().find(p => p.mod === "claude-chat" && p.tab === a.tab);
+    const view = (shared("chat.view") ?? {})[a.tab];
+    run("pane.focus", { pane: chat && view !== "terminal" ? chat.pane : a.pane });
+  }
+
+  // Stops a Claude session cleanly: /exit, or the Discussion's quit (either forgets it for the restore after reboot),
   // wait for the shell to come back, then close its pane. The conversation stays resumable (claude --resume).
   stopAgent(a, cx) {
     this.confirming = null;
@@ -114,7 +161,10 @@ export default class Agents extends View {
     cx.notify();
     cx.spawn(async (cx) => {
       try {
-        await hc(["send", a.address, "/exit"]);
+        // A Discussion session (claude/gui) quits by its own command; a console one by /exit.
+        const gui = await readTextFile(`${home()}/.cache/claude-gui/${a.address}/state.json`);
+        if (gui) await writeTextFile(`${home()}/.cache/claude-gui/${a.address}/cmd/stop-${Date.now()}.json`, '{"type":"quit"}', null);
+        else await hc(["send", a.address, "/exit"]);
         for (let i = 0; i < 40; i++) {
           const r = await hc(["get", a.address, "--json"]);
           if (["zsh", "bash", "sh", "fish"].includes(JSON.parse(r.stdout).foreground?.name)) break;
@@ -306,7 +356,13 @@ export default class Agents extends View {
     this.listed = new Map(list.map((a) => [a.address, a.status]));
     const all = terminals();
     this.migratePins(all);
+    const marks = marksOf(all);
+    this.clearOnArrival(list, marks);
     const shown = focused()?.agent;
+    // The selected agent: the one whose terminal has focus, else the one of the focused tab (its Discussion
+    // pane has the focus, not its terminal).
+    const current = list.find((a) => a.focused)?.address ?? list.find((a) => a.tab === focused()?.tab)?.address;
+    const isCurrent = (a) => a.address === current;
     const now = Date.now();
     this.track(list, now);
     // A kept sub-agent (one with a pane) is in agents() too: where a tree shows
@@ -390,12 +446,12 @@ export default class Agents extends View {
           .items_center()
           .gap(4)
           .hover((s) => s.bg(t.hover))
-          .on_click(() => run("pane.focus", { pane: a.pane }))
-          .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(t.muted).child(String(i + 1)))
+          .on_click(() => this.show(a))
+          .child(div().flex_1().min_w(0).whitespace_nowrap().text_right().text_color(marks.has(a.address) ? t.ansi1 : t.muted).child(String(i + 1)))
           .child(h_flex().w(14).flex_none().items_center().justify_center().child(this.status(t, a, true)));
       }
       const when = this.since(a);
-      const idle = a.status === "idle" && !a.focused;
+      const idle = a.status === "idle" && !isCurrent(a);
       const isPinned = a.pinned;
       const pin = div()
         .id(`pin-${a.address}`)
@@ -414,6 +470,18 @@ export default class Agents extends View {
           cx.notify();
         })
         .child(svg(`mods/workspace-chrome/${isPinned ? "pin-off" : "pin"}.svg`).size(13));
+      const isMarked = marks.has(a.address);
+      // The red "non lu" pill after the title; clicking it clears the mark. Hovering an unmarked row offers to mark it.
+      const badge = div().id(`mark-${a.address}`).flex_none().px(5).h(16).rounded(4).bg(t.ansi1 + "26")
+        .text_size(10.5).font_semibold().text_color(t.ansi1).flex().items_center().cursor_pointer()
+        .tooltip("Enlever la marque non lu")
+        .on_click((_e, cx) => { cx.stop_propagation(); this.setMark(a.address, false); cx.notify(); })
+        .child("non lu");
+      const mark = div().id(`mark-on-${a.address}`).flex_none().p(2).rounded(4).text_color(t.dim).cursor_pointer()
+        .hover((s) => s.bg(t.hover).text_color(t.ansi1))
+        .tooltip("Marquer comme non lu (Ctrl+Maj+M)")
+        .on_click((_e, cx) => { cx.stop_propagation(); this.setMark(a.address, true); cx.notify(); })
+        .child(svg("mods/workspace-chrome/square.svg").size(13));
       // Under a space header the space goes without saying; an automatic tab number says nothing.
       // Without a space header above (priority, pinned) the row names its space.
       const full = byPriority || isPinned;
@@ -449,7 +517,7 @@ export default class Agents extends View {
         });
       if (!this.hovered && this.confirming === a.address) this.confirming = null;
       const side = this.stopping.has(a.address) ? div().flex_none().text_size(11.5).text_color(C.blocked).child("Arrêt…")
-        : this.hovered === a.address ? h_flex().gap(2).items_center().child(pin).when(Boolean(stop), (el) => el.child(stop))
+        : this.hovered === a.address ? h_flex().gap(2).items_center().when(!isMarked, (el) => el.child(mark)).child(pin).when(Boolean(stop), (el) => el.child(stop))
         : LABEL[a.status] ? div().flex_none().h(17).px(7).rounded(9).bg(col).text_color("#1e1e2e").text_size(11.5).font_bold().flex().items_center().child(LABEL[a.status])
         : when ? div().flex_none().text_size(11.5).text_color(t.dim).child(duration(now - when)) : null;
       return h_flex()
@@ -463,21 +531,22 @@ export default class Agents extends View {
         .items_center()
         .gap(9)
                 // Selected: the same quiet grey as the selected space, no colored frame.
-        .when(a.focused, (el) => el.bg(t.selected))
+        .when(isCurrent(a), (el) => el.bg(t.selected))
         .cursor_pointer()
-        .hover((s) => s.bg(a.focused ? t.selected : C.cardHover))
+        .hover((s) => s.bg(isCurrent(a) ? t.selected : C.cardHover))
         .on_hover((on, cx) => {
           if (on) this.hovered = a.address;
           else if (this.hovered === a.address) this.hovered = null;
           cx.notify();
         })
-        .on_click(() => run("pane.focus", { pane: a.pane }))
+        .on_click(() => this.show(a))
         // The status bar on the left: a strong cue, no card background (only the selection has one).
         .when(a.status !== "idle", (el) => el.child(div().absolute().left(0).top(8).bottom(8).w(3).rounded(2).bg(col)))
         .child(this.bigStatus(a))
         .child(v_flex().flex_1().min_w(0).gap(1)
           .child(h_flex().gap(6).items_center().min_h(16)
             .child(div().flex_1().min_w(0).truncate().text_size(13).font_medium().text_color(a.status === "idle" ? C.idleTitle : C.title).child(info.title || name))
+            .when(isMarked, (el) => el.child(badge))
             .when(Boolean(machine), (el) => el.child(div().text_size(11.5).text_color(t.dim).child(machine)))
             .when(subs.length > 0, (el) => el.child(fold(a, subs)))
             .when(Boolean(side), (el) => el.child(side)))

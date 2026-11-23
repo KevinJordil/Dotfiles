@@ -1,6 +1,6 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
-import { spaces, agents, theme, run, window, keys, layout, shared, setShared, updates, panes, terminals, home, props, openOverlay, closeOverlay, hc, exec } from "herdr";
+import { spaces, agents, theme, run, window, keys, layout, shared, setShared, updates, panes, terminals, home, props, focused, openOverlay, closeOverlay, hc, exec, readTextFile, writeTextFile } from "herdr";
 
 const RED = "#f38ba8";
 
@@ -56,7 +56,10 @@ export default class WorkspaceStatus extends View {
   stop(c, cx) {
     cx.spawn(async () => {
       try {
-        await hc(["send", c.agent, "/exit"]);
+        // A Discussion session (claude/gui) quits by its own command; a console one by /exit.
+        const gui = await readTextFile(`${home()}/.cache/claude-gui/${c.agent}/state.json`);
+        if (gui) await writeTextFile(`${home()}/.cache/claude-gui/${c.agent}/cmd/stop-${Date.now()}.json`, '{"type":"quit"}', null);
+        else await hc(["send", c.agent, "/exit"]);
         for (let i = 0; i < 40; i++) {
           const r = await hc(["get", c.agent, "--json"]);
           if (["zsh", "bash", "sh", "fish"].includes(JSON.parse(r.stdout).foreground?.name)) break;
@@ -107,7 +110,9 @@ export default class WorkspaceStatus extends View {
       .child(label(space?.machine ? "server" : "monitor", space?.machine ?? "This computer"))
       .when(Boolean(space?.branch), el => el.child(label("branch", space.branch)))
       .child(h_flex().gap(6).items_center().child(div().size(6).rounded(3).bg(t.dim)).child(`${list.length} agents`)
-        .when(needs > 0, el => el.child(div().text_color(t.blocked).child(`· ${needs} needs you`))))
+        .when(needs > 0, el => el.child(div().id("needs").px(5).h(20).rounded(5).flex().items_center().cursor_pointer()
+          .text_color(t.blocked).hover((s) => s.bg(t.blocked + "26")).tooltip(needs > 1 ? "Aller à l'agent suivant qui t'attend" : "Aller à l'agent qui t'attend")
+          .on_click(() => this.nextNeeds()).child(`· ${needs} needs you`))))
       .child(div().flex_1())
       .child(div().id("palette").text_color(t.dim).on_click(() => run("app.palette")).child(this.hint(t)))
       .child(h_flex().gap(2).items_center()
@@ -121,6 +126,16 @@ export default class WorkspaceStatus extends View {
         .child(this.button(t, "machine", "server", "Ajouter une machine", () => run("mod.open", { name: "machine-add" })))
         .child(this.button(t, "settings", "settings", "Réglages", () => run("app.settings"))
           .when(Boolean(updates().app.ready), el => el.relative().child(div().absolute().top(3).right(3).size(5).rounded_full().bg(t.accent)))));
+  }
+
+  // The next agent waiting for an answer after the one in view (round the list), shown as the agents list
+  // shows it: its Discussion, unless that tab was switched to its terminal.
+  nextNeeds() {
+    const list = agents().filter(a => a.status === "blocked");
+    if (!list.length) return;
+    const a = list[(list.findIndex(x => x.tab === focused()?.tab) + 1) % list.length];
+    const chat = panes().find(p => p.mod === "claude-chat" && p.tab === a.tab);
+    run("pane.focus", { pane: chat && (shared("chat.view") ?? {})[a.tab] !== "terminal" ? chat.pane : a.pane });
   }
 
   button(t, id, icon, tip, action) {

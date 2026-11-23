@@ -113,6 +113,13 @@
                       "content": {
                         "mod": "changes"
                       }
+                    },
+                    {
+                      "id": "timeline",
+                      "type": "block",
+                      "content": {
+                        "mod": "over9k-prompts"
+                      }
                     }
                   ],
                   "active": "changes"
@@ -144,6 +151,9 @@
     }
   ],
   "background": "canvas",
+  "font": "Geist Mono",
+  "font_size": 13,
+  "ui_font": "Inter",
   "terminal_padding": [
     14,
     12
@@ -157,7 +167,5 @@
     12,
     16
   ],
-  "font": "Geist Mono",
-  "font_size": 13,
-  "ui_font": "Inter"
+  "toast": "kevin-toast"
 }

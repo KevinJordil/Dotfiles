@@ -1,0 +1,7 @@
+{
+  "name": "claude-gui",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code pour la vue Discussion de l'app Herdr (bridge.mjs)",
+  "dependencies": { "@anthropic-ai/claude-agent-sdk": "0.3.326" }
+}

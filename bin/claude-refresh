@@ -2,7 +2,7 @@
 # Relance les sessions Claude de l'app Herdr (herdr-core) pour qu'elles prennent des réglages changés (style de
 # réponse, plugins, vue Discussion) : /exit (console) ou l'ordre « quit » (Discussion), puis « claude --resume
 # <session> » dans le même terminal, qui l'ouvre dans la Discussion ; la conversation est gardée. Une session qui travaille, attend une réponse, a du texte dans sa saisie ou des tâches en
-# arrière-plan (shells, son /exit demanderait de les arrêter) n'est jamais coupée : elle est attendue, 2 h au plus.
+# arrière-plan (shells, son /exit demanderait de les arrêter) ou un sous-agent en cours n'est jamais coupée : elle est attendue, 2 h au plus.
 #   claude-refresh [terminal...]   (défaut : toutes)
 screen() { hc read "$1" 2>/dev/null | sed 's/\xc2\xa0/ /g' | grep -v '^\s*$' | tail -4; }
 state() { hc get "$1" --json 2>/dev/null | jq -r '.status.state // empty'; }
@@ -22,6 +22,20 @@ keep_seen() {
   for _ in {1..40}; do [[ -f ~/.cache/claude-gui/$1/state.json ]] && break; sleep 0.5; done
   sleep 1; hc label "$1" "herdr.seen=$(hc get "$1" --json | jq -r .turn)" >/dev/null
 }
+# Un sous-agent tourne encore (au premier plan ou en fond) : le compte du bridge, ou un sous-agent suivi par les hooks
+# (bin/agent-subagents) dont le journal a bougé depuis 15 min (au-delà : un arrêt manqué, pas un travail). Avec
+# l'ancien bridge, une session qui attend un sous-agent de fond se dit « done » : sans ce test, il serait coupé.
+subs_busy() {
+  local f
+  [[ $(jq -r '.bg.agents // 0' ~/.cache/claude-gui/"$1"/state.json 2>/dev/null) == 0 ]] || return 0
+  for f in ~/.cache/herdr-agents/hc-"$1".sub/*; do
+    [[ -e $f ]] || continue
+    [[ $(find ~/.claude/projects/*/"$2"/subagents/agent-"${f##*/}".jsonl -mmin -15 2>/dev/null) ]] && return 0
+  done
+  return 1
+}
+# Une session où rien n'a été envoyé n'a pas de conversation enregistrée : on relance un Claude neuf.
+resume_arg() { compgen -G ~/.claude/projects/"*/$1.jsonl" >/dev/null && echo " --resume $1"; }
 shell_back() { [[ $(hc get "$1" --json 2>/dev/null | jq -r '.foreground.name // empty') =~ ^(zsh|bash|sh)$ ]]; }
 
 if (( $# )); then todo=("$@"); else
@@ -37,6 +51,7 @@ while (( ${#todo[@]} && SECONDS < end )); do
     sid=$(jq -r '.sessionId // empty' ~/.claude/sessions/"$pid".json 2>/dev/null)
     [[ $sid ]] || { echo "$t : session inconnue, ignoré"; continue; }
     (( $(pgrep -c -P "$pid" -f shell-snapshots) == 0 )) || { left+=("$t"); continue; }  # une tâche de fond tourne
+    subs_busy "$t" "$sid" && { left+=("$t"); continue; }
     gui=$(gui_state "$t"); seen_before "$t" && was_seen=1 || was_seen=
     if [[ $gui ]]; then
       # Discussion : au repos, sans question en attente ; on la quitte par son ordre « quit »
@@ -44,7 +59,7 @@ while (( ${#todo[@]} && SECONDS < end )); do
       printf '{"type":"quit"}' >~/.cache/claude-gui/"$t"/cmd/refresh.json
       for _ in {1..40}; do shell_back "$t" && break; sleep 0.5; done
       shell_back "$t" || { left+=("$t"); continue; }
-      env -u HC_TERMINAL_ID hc send "$t" " source $(cd "$(dirname "$0")/.." && pwd)/zsh/claude.zsh; claude --resume $sid" >/dev/null && echo "$t : relancée ($sid)" && [[ $was_seen ]] && keep_seen "$t"
+      env -u HC_TERMINAL_ID hc send "$t" " source $(cd "$(dirname "$0")/.." && pwd)/zsh/claude.zsh; claude$(resume_arg "$sid")" >/dev/null && echo "$t : relancée ($sid)" && [[ $was_seen ]] && keep_seen "$t"
       continue
     fi
     # console : au repos et saisie vide, sinon on repasse plus tard
@@ -60,7 +75,7 @@ while (( ${#todo[@]} && SECONDS < end )); do
     shell_back "$t" || { left+=("$t"); continue; }
     # espace en tête : hors historique ; sans HC_TERMINAL_ID, hc tape la commande telle quelle
     # la fonction claude relue d'abord : un shell ouvert avant une modification de zsh/claude.zsh suit la dernière version
-    env -u HC_TERMINAL_ID hc send "$t" " source $(cd "$(dirname "$0")/.." && pwd)/zsh/claude.zsh; claude --resume $sid" >/dev/null && echo "$t : relancée ($sid)" && [[ $was_seen ]] && keep_seen "$t"
+    env -u HC_TERMINAL_ID hc send "$t" " source $(cd "$(dirname "$0")/.." && pwd)/zsh/claude.zsh; claude$(resume_arg "$sid")" >/dev/null && echo "$t : relancée ($sid)" && [[ $was_seen ]] && keep_seen "$t"
   done
   todo=("${left[@]}")
   (( ${#todo[@]} )) && sleep 10

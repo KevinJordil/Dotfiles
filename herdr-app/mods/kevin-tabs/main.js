@@ -39,7 +39,7 @@ export default class Tabs extends View {
     if (!props()?.account) cx.timer.every(60000, (cx) => this.refreshUsage(cx));
     this.pressed = null;
     this.hoverTab = null;
-    this.chatMade = new Set(); // tabs given a Discussion pane in this run (one closed by hand stays closed)
+    this.chatMade = new Set(); // "tab:bridge" given a Discussion pane (one closed by hand stays closed for that session)
     this.gui = {}; // terminal → its Claude runs the Discussion's bridge (claude/gui), not the console
     cx.timer.every(1500, (cx) => this.checkGui(cx));
     this.scroll = ScrollHandle.new();
@@ -74,7 +74,7 @@ export default class Tabs extends View {
         let alive = false;
         try {
           const st = JSON.parse((await readTextFile(`${home()}/.cache/claude-gui/${t}/state.json`)) ?? "null");
-          alive = Boolean(st) && (await exec("kill", ["-0", String(st.pid)])).code === 0;
+          alive = Boolean(st) && (await exec("kill", ["-0", String(st.pid)])).code === 0 && st.bridge;
         } catch {}
         if (this.gui[t] !== alive) { this.gui[t] = alive; changed = true; }
       }
@@ -214,9 +214,10 @@ export default class Tabs extends View {
     const claude = inTab.find(p => p.terminal && p.app === "claude-code" && this.gui[p.terminal]);
     const chat = inTab.find(p => p.mod === "claude-chat");
     const want = views[tab?.id] === "terminal" ? claude : chat;
-    if (tab && !claude) this.chatMade.delete(tab.id); // Claude ended: the next one gets its Discussion again
-    if (claude && !chat && views[tab.id] !== "terminal" && !this.chatMade.has(tab.id)) {
-      this.chatMade.add(tab.id);
+    // Per session (its bridge): one relaunched, even in a tab out of sight, gets its Discussion again.
+    const made = claude && `${tab.id}:${this.gui[claude.terminal]}`;
+    if (claude && !chat && views[tab.id] !== "terminal" && !this.chatMade.has(made)) {
+      this.chatMade.add(made);
       run("pane.split", { direction: "right", pane: claude.pane, mod: "claude-chat", props: { terminal: claude.terminal } });
     } else if (claude && want && !want.zoomed && this.chatZoom !== `${tab.id}:${want.pane}`) {
       this.chatZoom = `${tab.id}:${want.pane}`;

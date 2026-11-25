@@ -11,7 +11,7 @@
 //   node bridge.mjs [--resume [<id> | <search>] | --continue] [--model <m>] [--permission-mode <m>] [prompt]
 // Needs its node_modules: `npm install` here (install.sh does it).
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -81,13 +81,17 @@ const state = {
   // effort: the level a turn really ran at (hooks' effort.level), or the one chosen since; unknown before
   // (settings.json's effortLevel is not what runs: Claude Code picks per model and per turn)
   effort: null,
-  // Background work from Claude Code's own list (background_tasks_changed): agents (sub-agents, workflows) keep the
-  // session working, shells (a server, a watch) run on without holding it. Watchers that are not work are left out.
+  // Work under way besides the main agent: agents = sub-agents running, in the foreground or the background (SDK
+  // hooks SubagentStart/Stop; Claude Code's background list leaves foreground ones out) plus other background work
+  // (workflows); shells = background shells (a server, a watch), which don't hold the session.
   bg: { agents: 0, shells: 0 },
 };
 // Claude Code's session state (session_state_changed): "idle" only once the turn is over and no background agent
 // is still at work, so "done" waits for it rather than for the main agent's result. null: a CLI that sends none.
 let session = null;
+const subs = new Set();   // sub-agents running (agent_id)
+let bgOther = 0, bgShells = 0;
+const countBg = () => { state.bg = { agents: subs.size + bgOther, shells: bgShells }; save(); };
 let writing = null;
 function save(now = false) {
   if (writing && !now) return;
@@ -159,7 +163,19 @@ async function* input() {
 }
 let turnAt = null;
 // images: files pasted in the view (png, jpeg, gif, webp), sent before the text as the console does.
+// /remote-control (or /rc): the SDK can't start Remote Control, the console can. The session goes on in the console,
+// in this terminal, with Remote Control on (the Discussion closes); /exit there, then `claude --resume`, comes back.
+function remoteControl() {
+  fs.rmSync(path.join(dir, "state.json"), { force: true });
+  try { q.close(); } catch {}
+  process.stdout.write("\x1b]7501;state=clear\x07");
+  console.log("Remote Control : la session continue dans la console (claude.ai/code ou l'app Claude). /exit puis `claude --resume` pour revenir à la Discussion.");
+  const r = spawnSync(exe, [...(state.sid ? ["--resume", state.sid] : []), "--remote-control"], { stdio: "inherit" });
+  process.exit(r.status ?? 0);
+}
+
 function send(text, images = []) {
+  if (!images.length && /^\/(remote-control|rc)\s*$/.test(text.trim())) return remoteControl();
   emit({ k: "user", text, images, at: new Date().toISOString() });
   const content = images.length ? [
     ...images.map(f => ({ type: "image", source: { type: "base64", media_type: `image/${path.extname(f).slice(1)}`, data: fs.readFileSync(f, "base64") } })),
@@ -201,10 +217,14 @@ const q = query({ prompt: input(), options: {
   env: { ...process.env, CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS: "1" },
   stderr: data => process.stderr.write(data),
   // The effort each turn really runs at (after any downgrade for the model), as the console's status line shows it.
-  hooks: Object.fromEntries(["PreToolUse", "Stop"].map(ev => [ev, [{ hooks: [async i => {
-    if (i.effort?.level && i.effort.level !== state.effort) { state.effort = i.effort.level; save(); }
-    return {};
-  }] }]])),
+  hooks: {
+    ...Object.fromEntries(["PreToolUse", "Stop"].map(ev => [ev, [{ hooks: [async i => {
+      if (i.effort?.level && i.effort.level !== state.effort) { state.effort = i.effort.level; save(); }
+      return {};
+    }] }]])),
+    SubagentStart: [{ hooks: [async i => { subs.add(i.agent_id); countBg(); return {}; }] }],
+    SubagentStop: [{ hooks: [async i => { subs.delete(i.agent_id); countBg(); return {}; }] }],
+  },
 } });
 
 if (opt.resume) history(opt.resume);
@@ -254,18 +274,22 @@ try {
     if (m.type === "system" && m.subtype === "init") {
       Object.assign(state, { sid: m.session_id, model: m.model, mode: state.mode ?? m.permissionMode, cwd: m.cwd });
       if (!state.commands.length) {
-        q.supportedCommands().then(c => { state.commands = c.map(x => ({ name: x.name, description: x.description, hint: x.argumentHint })); save(); }).catch(() => {});
+        q.supportedCommands().then(c => { state.commands = [{ name: "remote-control", description: "Continuer cette session depuis claude.ai/code ou l'app Claude (passe en console)" },
+          ...c.map(x => ({ name: x.name, description: x.description, hint: x.argumentHint }))]; save(); }).catch(() => {});
         q.supportedModels().then(ms => { state.models = ms.map(x => ({ value: x.value, name: x.displayName, description: x.description,
           resolved: x.resolvedModel, efforts: x.supportsEffort ? x.supportedEffortLevels ?? [] : [] })); save(); }).catch(() => {});
       }
       save();
     } else if (m.type === "system" && m.subtype === "session_state_changed") {
       session = m.state;
+      // idle: nothing of this session still runs, a sub-agent whose stop was missed included
+      if (m.state === "idle" && subs.size) { subs.clear(); countBg(); }
       if (m.state === "idle" && state.status === "working" && !queue.length) report("done");
     } else if (m.type === "system" && m.subtype === "background_tasks_changed") {
       const work = m.tasks.filter(x => !x.ambient);
-      state.bg = { agents: work.filter(x => x.task_type !== "local_bash").length, shells: work.filter(x => x.task_type === "local_bash").length };
-      save();
+      bgOther = work.filter(x => !["local_bash", "local_agent"].includes(x.task_type)).length;
+      bgShells = work.filter(x => x.task_type === "local_bash").length;
+      countBg();
     } else if (m.type === "stream_event" && !m.parent_tool_use_id) {
       const ev = m.event;
       // Claude went on with a message sent while it worked: working again after its "done".

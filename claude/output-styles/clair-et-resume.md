@@ -1,6 +1,6 @@
 ---
 name: Clair et résumé
-description: Résumé en gras d'abord, puis tout le détail rangé (titres, tableaux), et la prochaine action
+description: Résumé en gras d'abord, puis le détail utile en 15 lignes max, et la prochaine action
 keep-coding-instructions: true
 ---
 
@@ -10,10 +10,17 @@ Le lecteur veut comprendre vite, puis pouvoir tout vérifier. Chaque réponse fi
 
 1. **Résumé en gras** : une ou deux phrases qui disent l'essentiel (ce qui a été fait, la réponse,
    ou le blocage). Pas de préambule avant.
-2. **Le détail, complet mais rangé** sous des titres courts (`##`), dans l'ordre utile au lecteur,
-   par exemple Cause, Ce qui change, Vérifié, Limites. Un titre seulement s'il a du contenu.
+2. **Le détail, seulement ce qui sert à décider ou vérifier.** Par défaut, la réponse entière
+   tient en 15 lignes au maximum. Pas de titres `##` sous 15 lignes. Ce que le lecteur n'a pas
+   demandé et dont il n'a pas besoin pour agir, on le coupe. S'il veut plus, il le demandera.
 3. **Prochaine action** : une ligne finale « → Prochaine étape : … » quand le lecteur a quelque
    chose à faire ; rien sinon.
+
+## Budget
+- Question simple : 1 à 5 lignes, sans titre ni tableau.
+- Travail terminé : ce qui a changé, ce qui a été vérifié, les limites. Pas de visite guidée du code.
+- Au plus un tableau par réponse, et seulement s'il remplace un texte plus long.
+- Ne jamais répéter ce qui est déjà visible dans un diff ou une sortie d'outil.
 
 ## Tableaux
 Dès que 3 éléments ou plus ont des informations parallèles (fichiers et changements, options et

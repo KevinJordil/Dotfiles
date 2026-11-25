@@ -101,16 +101,14 @@ export default class Chat extends View {
     this.feedback = InputState.new({ placeholder: "Dire à Claude quoi faire autrement (facultatif)" });
     this.other = [0, 1, 2, 3].map(() => InputState.new({ placeholder: "Autre réponse…" }));
     // The keyboard belongs to the input whenever this Discussion is in front (the window active, its pane the focused
-    // one), unless one of its other fields has it: checked often, so a launch, a click beside the input or the window
-    // coming back never leaves keys going nowhere. Which field has it comes from their focus and blur events.
-    this.field = null;
-    [this.input, this.feedback, ...this.other].forEach(f => {
-      f.on("focus", () => { this.field = f; });
-      f.on("blur", () => { if (this.field === f) this.field = null; });
-    });
+    // one): checked often, so a launch or the window coming back never leaves keys going nowhere. A press in the
+    // conversation (selecting text to copy, a card's field) holds it off (reading), until the input box is clicked, a
+    // message sent, the agent shown again or the window back in front: focus set from code fires no focus event, so
+    // which field has the keyboard can't be known.
+    this.reading = false;
     cx.timer.every(250, () => this.keepFocus());
     // "focusable" (mod.json): Herdr hands this pane the keyboard with a "focus" command; the input takes it.
-    cx.spawn(async (cx) => { for (;;) { if ((await nextCommand()) === "focus" && !this.field) this.input.focus(); cx.notify(); } });
+    cx.spawn(async (cx) => { for (;;) { if ((await nextCommand()) === "focus" && !this.reading) this.input.focus(); cx.notify(); } });
     this.picked = {}; // question → chosen labels
     // The textarea keeps ↑/↓, Tab, Esc and Ctrl+C for itself: these bindings, more specific than its own, take them
     // only in the composer's contexts drawn by render.
@@ -188,7 +186,10 @@ export default class Chat extends View {
   }
 
   keepFocus() {
-    if (!this.field && window()?.active && this.me()?.focused && this.shown()) this.input.focus();
+    const active = Boolean(window()?.active);
+    if (active && !this.wasActive) this.reading = false;
+    this.wasActive = active;
+    if (!this.reading && active && this.me()?.focused && this.shown()) this.input.focus();
   }
 
   // This pane is on screen: its tab is the active one.
@@ -337,7 +338,7 @@ export default class Chat extends View {
     this.feedback.set_value(""); this.other.forEach(s => s.set_value("")); this.picked = {}; this.choice = null;
     if (p) this.bottom();
   }
-  bottom() { this.follow = true; this.up = 0; this.stick = true; }
+  bottom() { this.follow = true; this.up = 0; this.stick = true; this.reading = false; }
   answer(c) { this.command({ type: "answer", id: this.state.pending.id, ...c }); }
   decline(stop) { this.answer({ behavior: "deny", message: this.feedback.value().trim() || undefined, stop }); }
 
@@ -521,7 +522,7 @@ export default class Chat extends View {
             .flex().items_center().justify_center().text_size(11).text_color(C.subtle).cursor_pointer().hover(s => s.text_color(C.text))
             .tooltip("Retirer l'image").on_click((_e, cx) => { this.images.splice(k, 1); cx.notify(); }).child("×"))))))
       // A click anywhere in the box, not only on the text, puts the cursor in the input.
-      .child(h_flex().id("composer").on_click(() => this.input.focus()).w_full().min_h(46).px(14).py(8).gap(10).rounded(10).items_end().bg(C.input).border_1().border_color(C.border)
+      .child(h_flex().id("composer").on_click(() => { this.reading = false; this.input.focus(); }).w_full().min_h(46).px(14).py(8).gap(10).rounded(10).items_end().bg(C.input).border_1().border_color(C.border)
         .key_context(context)
         .on_action("chat-older", (_e, cx) => this.recall(1, cx))
         .on_action("chat-newer", (_e, cx) => this.recall(-1, cx))
@@ -597,6 +598,9 @@ export default class Chat extends View {
     if (this.stick) { this.stick = false; this.scroll.scroll_to_item(turns.length + 1); }
     return v_flex().size_full().bg(C.bg).text_color(C.text).text_size(13.5)
       .child(v_flex().id("chat-scroll").flex_1().min_h(0).overflow_y_scroll().track_scroll(this.scroll).py(20)
+        // a selection may keep the press for itself: its release counts too
+        .on_mouse_down("left", () => { this.reading = true; })
+        .on_mouse_up("left", () => { this.reading = true; })
         // GPUI's wheel delta: y > 0 scrolls up
         .on_scroll_wheel((e) => { this.up = Math.max(0, this.up + e.delta.y); this.follow = this.up <= 0; })
         .children(turns.map((turn, i) => h_flex().id(`turn-${i}`).w_full().justify_center().px(14)

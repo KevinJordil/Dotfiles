@@ -6,9 +6,12 @@
 #   claude-refresh [terminal...]   (défaut : toutes)
 screen() { hc read "$1" 2>/dev/null | sed 's/\xc2\xa0/ /g' | grep -v '^\s*$' | tail -4; }
 state() { hc get "$1" --json 2>/dev/null | jq -r '.status.state // empty'; }
+# Les Claude qui tournent : la console (lancée par le lien « claude ») et celui de la Discussion, que le SDK lance
+# par son chemin complet (~/.local/share/claude/versions/<version>) : son nom de processus est alors la version.
+claude_pids() { pgrep -x 'claude(\.exe)?'; pgrep -f '^[^ ]*/claude/versions/[^ /]+( |$)'; }
 pid_of() {  # le claude que herdr-core a lancé dans ce terminal
   local p
-  for p in $(pgrep -x 'claude(\.exe)?'); do
+  for p in $(claude_pids); do
     tr '\0' '\n' </proc/"$p"/environ 2>/dev/null | grep -qx "HC_TERMINAL_ID=$1" && { echo "$p"; return; }
   done
 }
@@ -39,7 +42,7 @@ resume_arg() { compgen -G ~/.claude/projects/"*/$1.jsonl" >/dev/null && echo " -
 shell_back() { [[ $(hc get "$1" --json 2>/dev/null | jq -r '.foreground.name // empty') =~ ^(zsh|bash|sh)$ ]]; }
 
 if (( $# )); then todo=("$@"); else
-  todo=(); for p in $(pgrep -x 'claude(\.exe)?'); do
+  todo=(); for p in $(claude_pids); do
     t=$(tr '\0' '\n' </proc/"$p"/environ 2>/dev/null | sed -n 's/^HC_TERMINAL_ID=//p'); [[ $t ]] && todo+=("$t")
   done
 fi
